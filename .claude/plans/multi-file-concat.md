@@ -50,4 +50,4 @@ GPX/KML/TCX/FIT/GeoJSON/CSV 文件，按用户指定顺序**首尾拼接成一�
 Wave 1：M1
 
 ## Status
-Not Started
+Completed
