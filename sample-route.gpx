@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="cycling-grid-sample" xmlns="http://www.topografix.com/GPX/1/1">
+ <trk><name>示例环线</name><trkseg>
+  <trkpt lat="39.900" lon="116.380"/><trkpt lat="39.905" lon="116.385"/>
+  <trkpt lat="39.912" lon="116.395"/><trkpt lat="39.918" lon="116.410"/>
+  <trkpt lat="39.920" lon="116.430"/><trkpt lat="39.917" lon="116.450"/>
+  <trkpt lat="39.910" lon="116.462"/><trkpt lat="39.900" lon="116.468"/>
+  <trkpt lat="39.888" lon="116.465"/><trkpt lat="39.878" lon="116.455"/>
+  <trkpt lat="39.872" lon="116.440"/><trkpt lat="39.870" lon="116.420"/>
+  <trkpt lat="39.873" lon="116.402"/><trkpt lat="39.880" lon="116.390"/>
+  <trkpt lat="39.890" lon="116.383"/><trkpt lat="39.900" lon="116.380"/>
+ </trkseg></trk>
+</gpx>
