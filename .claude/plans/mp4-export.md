@@ -130,4 +130,4 @@ T1 → T2 → T3
 - T2/T3 是浏览器 canvas / WebCodecs 运行时代码，现有 `node --test` 基础设施覆盖不到；由 `@function-implementer` 按 spec 实现，架构师起本地 http server + Chrome 实测 + ffprobe 验证导出的 MP4 验收。
 
 ## Status
-In Progress
+Completed
