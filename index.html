@@ -144,10 +144,62 @@
       <div class="hint">
         <b>剪映用法：</b>地图卡片当画中画放角落；把定位点也拖进去，沿线路打几个位置关键帧即可让它移动。不想动就只放地图卡片。
       </div>
+
+      <h2 style="margin-top:20px">MP4 动画导出</h2>
+      <div class="row">
+        <div class="field">
+          <label>时长（秒）</label>
+          <input type="number" id="mp4Duration" min="1" max="60" step="0.5" value="6">
+        </div>
+        <div class="field">
+          <label>帧率</label>
+          <select id="mp4Fps">
+            <option value="24">24</option>
+            <option value="30" selected>30</option>
+            <option value="60">60</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>分辨率</label>
+          <select id="mp4Resolution">
+            <option value="720">720</option>
+            <option value="1080" selected>1080</option>
+            <option value="1440">1440</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>背景模式</label>
+          <select id="mp4BgMode">
+            <option value="card" selected>卡片</option>
+            <option value="green">绿幕</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field" id="mp4PageColorField">
+          <label>卡片背景色</label>
+          <input type="color" id="mp4PageColor" value="#0d0f12">
+        </div>
+        <div class="field" id="mp4GreenColorField" style="display:none">
+          <label>绿幕色</label>
+          <input type="color" id="mp4GreenColor" value="#00b140">
+        </div>
+      </div>
+      <div class="field" id="mp4ProgressWrap" style="display:none">
+        <label>导出进度 <span id="mp4ProgressV">0%</span></label>
+        <progress id="mp4Progress" value="0" max="100" style="width:100%"></progress>
+      </div>
+      <div class="btns">
+        <button class="exp" id="expMp4" disabled>导出 MP4 动画</button>
+      </div>
+      <div class="hint" id="mp4Status" style="display:none"></div>
     </div>
   </div>
 </div>
 
+<script src="mp4-muxer.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const CARD_SIZE=600;
@@ -336,6 +388,40 @@ function trackDistanceKm(points){
   }
   return m/1000;
 }
+// ==================== 沿弧长匀速插值定位点（progress∈[0,1] → 屏幕坐标） ====================
+// points 为 projectTrack 输出的屏幕坐标数组，按相邻线段累计弧长匀速插值出 progress 处的点。
+function pointAtProgress(points, progress) {
+  if (!points || points.length === 0) return null;
+  if (points.length === 1) return { x: points[0].x, y: points[0].y };
+
+  const segLengths = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    segLengths.push(len);
+    total += len;
+  }
+
+  if (progress <= 0 || total === 0) return { x: points[0].x, y: points[0].y };
+  if (progress >= 1) return { x: points[points.length - 1].x, y: points[points.length - 1].y };
+
+  const target = total * progress;
+  let acc = 0;
+  for (let i = 0; i < segLengths.length; i++) {
+    const len = segLengths[i];
+    if (len === 0) continue;
+    if (acc + len >= target) {
+      const f = (target - acc) / len;
+      const p0 = points[i], p1 = points[i + 1];
+      return { x: p0.x + (p1.x - p0.x) * f, y: p0.y + (p1.y - p0.y) * f };
+    }
+    acc += len;
+  }
+
+  return { x: points[points.length - 1].x, y: points[points.length - 1].y };
+}
 
 /* ==================== 渲染 ==================== */
 function hexToRgba(hex,alpha){
@@ -390,6 +476,47 @@ function renderDot(canvas,size){
   ctx.restore();
   ctx.beginPath(); ctx.arc(c,c,r,0,Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
 }
+// 逐帧渲染（MP4 导出用）：整帧不透明背景 + 全线常显 + 定位点走到 progress 处。
+// 复用 projectTrack/strokePath/drawMarker/pointAtProgress；参数全部来自 opts（便于逐帧/离屏，不读 DOM）。
+function renderFrame(ctx,size,progress,opts){
+  const scale=size/CARD_SIZE;
+  const radius=opts.radius*scale, pad=opts.pad*scale, lineWidth=opts.lineWidth*scale;
+
+  ctx.clearRect(0,0,size,size);
+  if(!trackPoints) return;
+
+  // 背景第一层：整帧不透明（MP4 无 alpha，避免透出黑）
+  ctx.fillStyle=(opts.bgMode==='green')?opts.greenColor:opts.pageColor;
+  ctx.fillRect(0,0,size,size);
+
+  ctx.save();
+  if(opts.bgMode!=='green'){
+    // 卡片模式：圆角裁剪 + 叠半透明卡片底，线路/标记/定位点都画在圆角内
+    ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
+    ctx.fillStyle=hexToRgba(opts.bgColor,opts.bgOpacity);
+    ctx.fillRect(0,0,size,size);
+  }
+
+  const proj=projectTrack(trackPoints,size-2*pad);
+  ctx.translate(pad,pad);
+  strokePath(ctx,proj,opts.lineColor,lineWidth);
+  if(opts.showMarkers){
+    const mr=Math.max(lineWidth*0.9,7*scale);
+    drawMarker(ctx,proj.points[0],opts.startColor,mr);
+    drawMarker(ctx,proj.points.at(-1),opts.endColor,mr);
+  }
+  // 定位点：仿 renderDot（白环 + 彩色心 + 阴影），直径随 dotSize*scale
+  const p=pointAtProgress(proj.points,progress);
+  if(p){
+    const d=opts.dotSize*scale, r=d*0.30, ring=d*0.09;
+    ctx.save();
+    ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=d*0.08; ctx.shadowOffsetY=d*0.02;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r+ring,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fillStyle=opts.dotColor; ctx.fill();
+  }
+  ctx.restore();
+}
 function render(){
   renderCard($('card'),CARD_SIZE);
   renderDot($('dot'),+$('dotSize').value);
@@ -413,6 +540,110 @@ function exportDot(){
   download(c,'定位点.png');
 }
 
+/* ---- MP4 动画导出（WebCodecs + vendored mp4-muxer） ---- */
+const MP4_BITRATE={720:6e6,1080:12e6,1440:20e6};
+function mp4Supported(){
+  return 'VideoEncoder' in window && 'VideoFrame' in window &&
+    typeof VideoEncoder.isConfigSupported==='function' && !!window.Mp4Muxer;
+}
+function buildFrameOpts(){
+  return {
+    radius:+$('radius').value,
+    pad:+$('pad').value,
+    lineWidth:+$('lineWidth').value,
+    bgMode:$('mp4BgMode').value,
+    pageColor:$('mp4PageColor').value,
+    greenColor:$('mp4GreenColor').value,
+    bgColor:$('bgColor').value,
+    bgOpacity:+$('bgOpacity').value/100,
+    lineColor:$('lineColor').value,
+    showMarkers:$('showMarkers').checked,
+    startColor:$('startColor').value,
+    endColor:$('endColor').value,
+    dotColor:$('dotColor').value,
+    dotSize:+$('dotSize').value,
+  };
+}
+async function pickMp4Codec(size,fps){
+  const byRes={720:'avc1.42001f',1080:'avc1.420028',1440:'avc1.420033'};
+  const primary=byRes[size]||'avc1.420028';
+  const candidates=[...new Set([primary,'avc1.42001f','avc1.420028','avc1.420033'])];
+  const bitrate=MP4_BITRATE[size]||1.2e7;
+  for(const codec of candidates){
+    try{
+      const r=await VideoEncoder.isConfigSupported({codec,width:size,height:size,bitrate,framerate:fps});
+      if(r&&r.supported) return codec;
+    }catch(_){}
+  }
+  return null;
+}
+async function exportMp4(){
+  if(!trackPoints||!mp4Supported()) return;
+  const btn=$('expMp4');
+  const duration=Math.max(0.1,+$('mp4Duration').value||6);
+  const fps=Math.max(1,+$('mp4Fps').value||30);
+  const size=+$('mp4Resolution').value||1080;
+  const frames=Math.max(1,Math.round(duration*fps));
+  const opts=buildFrameOpts();
+  const bitrate=MP4_BITRATE[size]||1.2e7;
+
+  const off=document.createElement('canvas');
+  off.width=off.height=size;
+  const offCtx=off.getContext('2d');
+
+  btn.disabled=true;
+  $('mp4Status').style.display='none';
+  $('mp4ProgressWrap').style.display='';
+  $('mp4Progress').value=0; $('mp4Progress').max=frames;
+  $('mp4ProgressV').textContent='0%';
+
+  let encoder=null;
+  try{
+    const codec=await pickMp4Codec(size,fps);
+    if(!codec) throw new Error('当前浏览器不支持所需的 H.264 编码，请使用最新版 Chrome / Edge，或较新版本的 Safari');
+
+    const target=new Mp4Muxer.ArrayBufferTarget();
+    const muxer=new Mp4Muxer.Muxer({ target, video:{ codec:'avc', width:size, height:size }, fastStart:'in-memory' });
+    let encodeError=null;
+    encoder=new VideoEncoder({
+      output:(chunk,meta)=>muxer.addVideoChunk(chunk,meta),
+      error:e=>{ encodeError=e; }
+    });
+    encoder.configure({ codec, width:size, height:size, bitrate, framerate:fps });
+
+    for(let i=0;i<frames;i++){
+      if(encodeError) throw encodeError;
+      const progress=frames>1 ? i/(frames-1) : 0;
+      renderFrame(offCtx,size,progress,opts);
+      const frame=new VideoFrame(off,{timestamp:Math.round(i*1e6/fps)});
+      encoder.encode(frame,{keyFrame:i%fps===0});
+      frame.close();
+      $('mp4Progress').value=i+1;
+      $('mp4ProgressV').textContent=Math.round(((i+1)/frames)*100)+'% ('+(i+1)+'/'+frames+')';
+      await new Promise(r=>setTimeout(r));
+    }
+    await encoder.flush();
+    if(encodeError) throw encodeError;
+    muxer.finalize();
+
+    const blob=new Blob([target.buffer],{type:'video/mp4'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='轨迹动画.mp4';
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+
+    $('mp4Status').textContent='导出成功，已下载「轨迹动画.mp4」';
+    $('mp4Status').style.display='';
+  }catch(err){
+    console.error(err);
+    $('mp4Status').textContent='导出失败：'+(err&&err.message?err.message:String(err));
+    $('mp4Status').style.display='';
+  }finally{
+    if(encoder&&encoder.state&&encoder.state!=='closed'){ try{encoder.close();}catch(_){} }
+    btn.disabled=false;
+    $('mp4ProgressWrap').style.display='none';
+  }
+}
+
 /* ==================== 交互 ==================== */
 async function loadFile(file){
   const res=await parseTrackFile(file);
@@ -421,6 +652,7 @@ async function loadFile(file){
   const km=trackDistanceKm(trackPoints);
   $('info').innerHTML=`已载入 <b>${res.format}</b> · <b>${trackPoints.length}</b> 个轨迹点 · 约 <b>${km.toFixed(1)}</b> km`;
   $('expCard').disabled=false;
+  if(mp4Supported()) $('expMp4').disabled=false;
   render();
 }
 const drop=$('drop');
@@ -441,6 +673,12 @@ bind('dotSize','dotSizeV');
 
 $('expCard').onclick=exportCard;
 $('expDot').onclick=exportDot;
+$('expMp4').onclick=exportMp4;
+$('mp4BgMode').addEventListener('change',()=>{
+  const green=$('mp4BgMode').value==='green';
+  $('mp4PageColorField').style.display=green?'none':'';
+  $('mp4GreenColorField').style.display=green?'':'none';
+});
 render();
 </script>
 </body>
