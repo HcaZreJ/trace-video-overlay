@@ -321,3 +321,38 @@ export function buildStoreZip(files) {
   for (const c of all) { out.set(c, p); p += c.length; }
   return out;
 }
+
+// ==================== 沿弧长匀速插值定位点（progress∈[0,1] → 屏幕坐标） ====================
+// points 为 projectTrack 输出的屏幕坐标数组，按相邻线段累计弧长匀速插值出 progress 处的点。
+export function pointAtProgress(points, progress) {
+  if (!points || points.length === 0) return null;
+  if (points.length === 1) return { x: points[0].x, y: points[0].y };
+
+  const segLengths = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    segLengths.push(len);
+    total += len;
+  }
+
+  if (progress <= 0 || total === 0) return { x: points[0].x, y: points[0].y };
+  if (progress >= 1) return { x: points[points.length - 1].x, y: points[points.length - 1].y };
+
+  const target = total * progress;
+  let acc = 0;
+  for (let i = 0; i < segLengths.length; i++) {
+    const len = segLengths[i];
+    if (len === 0) continue;
+    if (acc + len >= target) {
+      const f = (target - acc) / len;
+      const p0 = points[i], p1 = points[i + 1];
+      return { x: p0.x + (p1.x - p0.x) * f, y: p0.y + (p1.y - p0.y) * f };
+    }
+    acc += len;
+  }
+
+  return { x: points[points.length - 1].x, y: points[points.length - 1].y };
+}
