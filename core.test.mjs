@@ -8,7 +8,7 @@ import {
   mercatorX, mercatorY, smoothTrack, projectTrack,
   extractGeoJSONCoords, extractTextCoords, crc32, buildStoreZip, trackDistanceKm,
   trackDurationSec, avgSpeedKmh, paceSecPerKm, elevationGainM, formatDuration, formatPace,
-  layoutTextBlockX,
+  layoutTextBlockX, concatTrackPoints, reorderTrackFiles,
 } from './core.mjs';
 
 // ==================== 运动指标 ====================
@@ -292,4 +292,178 @@ test('extractGeoJSONCoords: 现有写法不回退', () => {
   ] }).length, 2);
   // properties 里的 geometries 键不应被误读
   assert.equal(extractGeoJSONCoords({ type: 'Feature', properties: { geometries: [{ type: 'LineString', coordinates: [[9, 9], [9, 9]] }] }, geometry: { type: 'LineString', coordinates: [[1, 1], [2, 2]] } }).length, 2);
+});
+
+// ==================== concatTrackPoints（多轨迹文件首尾拼接） ====================
+test('concatTrackPoints: 空数组返回 null', () => {
+  assert.equal(concatTrackPoints([]), null);
+});
+
+test('concatTrackPoints: 单文件返回其 points，内容与顺序不变', () => {
+  const points = [{ lng: 1, lat: 1 }, { lng: 2, lat: 2 }, { lng: 3, lat: 3 }];
+  const trackFiles = [{ name: 'a.gpx', format: 'gpx', points }];
+  assert.deepEqual(concatTrackPoints(trackFiles), points);
+});
+
+test('concatTrackPoints: 多文件按数组顺序首尾拼接', () => {
+  const p1 = [{ lng: 0, lat: 0 }, { lng: 1, lat: 1 }];
+  const p2 = [{ lng: 2, lat: 2 }, { lng: 3, lat: 3 }];
+  const p3 = [{ lng: 4, lat: 4 }];
+  const trackFiles = [
+    { name: 'f1.gpx', format: 'gpx', points: p1 },
+    { name: 'f2.gpx', format: 'gpx', points: p2 },
+    { name: 'f3.gpx', format: 'gpx', points: p3 },
+  ];
+  const result = concatTrackPoints(trackFiles);
+  assert.deepEqual(result, [...p1, ...p2, ...p3]);
+  assert.deepEqual(result[0], p1[0], '首元素应是首文件首点');
+  assert.deepEqual(result[result.length - 1], p3[p3.length - 1], '末元素应是末文件末点');
+  assert.equal(result.length, p1.length + p2.length + p3.length, '总点数=各文件点数之和');
+});
+
+test('concatTrackPoints: 不去重、不做接缝处理——边界重复坐标原样保留', () => {
+  const shared = { lng: 10, lat: 20 };
+  const p1 = [{ lng: 0, lat: 0 }, { ...shared }];
+  const p2 = [{ ...shared }, { lng: 30, lat: 40 }];
+  const trackFiles = [
+    { name: 'f1.gpx', format: 'gpx', points: p1 },
+    { name: 'f2.gpx', format: 'gpx', points: p2 },
+  ];
+  const result = concatTrackPoints(trackFiles);
+  assert.equal(result.length, 4, '重复坐标不应被去重');
+  assert.deepEqual(result, [...p1, ...p2]);
+});
+
+test('concatTrackPoints: 完整保留点的所有字段(ele/time)', () => {
+  const p1 = [{ lng: 1, lat: 1, ele: 100, time: 1000 }];
+  const p2 = [{ lng: 2, lat: 2, ele: 200, time: 2000 }];
+  const trackFiles = [
+    { name: 'f1.gpx', format: 'gpx', points: p1 },
+    { name: 'f2.gpx', format: 'gpx', points: p2 },
+  ];
+  const result = concatTrackPoints(trackFiles);
+  assert.deepEqual(result, [
+    { lng: 1, lat: 1, ele: 100, time: 1000 },
+    { lng: 2, lat: 2, ele: 200, time: 2000 },
+  ]);
+});
+
+test('concatTrackPoints: 单文件 points 为空数组 → 返回空数组而非 null', () => {
+  const trackFiles = [{ name: 'empty.gpx', format: 'gpx', points: [] }];
+  const result = concatTrackPoints(trackFiles);
+  assert.notEqual(result, null, 'trackFiles 非空时不应返回 null');
+  assert.deepEqual(result, []);
+});
+
+test('concatTrackPoints: 某文件 points 为空，其余正常拼接，空文件贡献 0 点', () => {
+  const p1 = [{ lng: 0, lat: 0 }, { lng: 1, lat: 1 }];
+  const p3 = [{ lng: 5, lat: 5 }];
+  const trackFiles = [
+    { name: 'f1.gpx', format: 'gpx', points: p1 },
+    { name: 'f2.gpx', format: 'gpx', points: [] },
+    { name: 'f3.gpx', format: 'gpx', points: p3 },
+  ];
+  const result = concatTrackPoints(trackFiles);
+  assert.deepEqual(result, [...p1, ...p3]);
+  assert.equal(result.length, 3);
+});
+
+test('concatTrackPoints: 不修改入参 trackFiles 及其 points 数组', () => {
+  const trackFiles = [
+    { name: 'f1.gpx', format: 'gpx', points: [{ lng: 0, lat: 0 }, { lng: 1, lat: 1 }] },
+    { name: 'f2.gpx', format: 'gpx', points: [{ lng: 2, lat: 2 }] },
+  ];
+  const snapshot = structuredClone(trackFiles);
+  concatTrackPoints(trackFiles);
+  assert.deepEqual(trackFiles, snapshot, '调用后入参应与调用前快照一致');
+});
+
+// ==================== reorderTrackFiles（文件列表重排/删除） ====================
+function fileStub(name) { return { name, format: 'gpx', points: [{ lng: 0, lat: 0 }] }; }
+
+test('reorderTrackFiles: del 移除指定索引', () => {
+  const files = [fileStub('a'), fileStub('b'), fileStub('c')];
+  const result = reorderTrackFiles(files, 'del', 1);
+  assert.deepEqual(result, [fileStub('a'), fileStub('c')]);
+});
+
+test('reorderTrackFiles: up 交换 i 与 i-1', () => {
+  const files = [fileStub('a'), fileStub('b'), fileStub('c')];
+  const result = reorderTrackFiles(files, 'up', 1);
+  assert.deepEqual(result, [fileStub('b'), fileStub('a'), fileStub('c')]);
+});
+
+test('reorderTrackFiles: up 在 i===0 时内容不变（首项不能再上移）', () => {
+  const files = [fileStub('a'), fileStub('b'), fileStub('c')];
+  const result = reorderTrackFiles(files, 'up', 0);
+  assert.deepEqual(result, files);
+});
+
+test('reorderTrackFiles: down 交换 i 与 i+1', () => {
+  const files = [fileStub('a'), fileStub('b'), fileStub('c')];
+  const result = reorderTrackFiles(files, 'down', 1);
+  assert.deepEqual(result, [fileStub('a'), fileStub('c'), fileStub('b')]);
+});
+
+test('reorderTrackFiles: down 在末项时内容不变（末项不能再下移）', () => {
+  const files = [fileStub('a'), fileStub('b'), fileStub('c')];
+  const result = reorderTrackFiles(files, 'down', files.length - 1);
+  assert.deepEqual(result, files);
+});
+
+test('reorderTrackFiles: 未知 act 返回内容相同的新数组，不抛异常', () => {
+  const files = [fileStub('a'), fileStub('b')];
+  const result = reorderTrackFiles(files, 'unknown-action', 0);
+  assert.deepEqual(result, files);
+});
+
+test('reorderTrackFiles: i 越界(负数)时内容不变', () => {
+  const files = [fileStub('a'), fileStub('b'), fileStub('c')];
+  assert.deepEqual(reorderTrackFiles(files, 'up', -1), files);
+  assert.deepEqual(reorderTrackFiles(files, 'down', -1), files);
+});
+
+test('reorderTrackFiles: i 越界(>=length)时内容不变', () => {
+  const files = [fileStub('a'), fileStub('b'), fileStub('c')];
+  assert.deepEqual(reorderTrackFiles(files, 'up', files.length), files);
+  assert.deepEqual(reorderTrackFiles(files, 'down', files.length + 5), files);
+});
+
+test('reorderTrackFiles: 单元素数组 up/down 内容不变', () => {
+  const files = [fileStub('only')];
+  assert.deepEqual(reorderTrackFiles(files, 'up', 0), files);
+  assert.deepEqual(reorderTrackFiles(files, 'down', 0), files);
+});
+
+test('reorderTrackFiles: del 唯一元素返回空数组', () => {
+  const files = [fileStub('only')];
+  const result = reorderTrackFiles(files, 'del', 0);
+  assert.deepEqual(result, []);
+});
+
+test('reorderTrackFiles: del 越界索引时内容不变', () => {
+  const files = [fileStub('a'), fileStub('b')];
+  assert.deepEqual(reorderTrackFiles(files, 'del', 5), files);
+  assert.deepEqual(reorderTrackFiles(files, 'del', -1), files);
+});
+
+test('reorderTrackFiles: 返回值是新数组引用，且不修改入参', () => {
+  const files = [fileStub('a'), fileStub('b'), fileStub('c')];
+  const snapshot = structuredClone(files);
+
+  const delResult = reorderTrackFiles(files, 'del', 1);
+  assert.notEqual(delResult, files, 'del 结果应是新数组引用');
+  assert.deepEqual(files, snapshot, 'del 调用后不应修改入参');
+
+  const upResult = reorderTrackFiles(files, 'up', 1);
+  assert.notEqual(upResult, files, 'up 结果应是新数组引用');
+  assert.deepEqual(files, snapshot, 'up 调用后不应修改入参');
+
+  const downResult = reorderTrackFiles(files, 'down', 0);
+  assert.notEqual(downResult, files, 'down 结果应是新数组引用');
+  assert.deepEqual(files, snapshot, 'down 调用后不应修改入参');
+
+  const unknownResult = reorderTrackFiles(files, 'noop', 0);
+  assert.notEqual(unknownResult, files, '未知 act 结果也应是新数组引用');
+  assert.deepEqual(files, snapshot, '未知 act 调用后不应修改入参');
 });

@@ -60,6 +60,17 @@
   button.exp:disabled{opacity:.4;cursor:not-allowed}
   .hint{font-size:12px;color:var(--dim);margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
   .hint b{color:var(--fg)}
+  .file-list{margin:0 0 14px}
+  .file-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:13px}
+  .file-idx{width:18px;color:var(--dim);text-align:center;flex-shrink:0}
+  .file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file-meta{color:var(--dim);flex-shrink:0;font-size:12px}
+  .file-btns{display:flex;gap:4px;flex-shrink:0}
+  .file-btns button{width:24px;height:24px;border:none;border-radius:6px;background:var(--line);
+    color:var(--fg);cursor:pointer;font-size:13px;line-height:1;transition:.15s}
+  .file-btns button:not(:disabled):hover{background:var(--accent);color:#fff}
+  .file-btns button:disabled{opacity:.35;cursor:not-allowed}
   input[type=file]{display:none}
 </style>
 </head>
@@ -70,11 +81,12 @@
 </header>
 <div class="wrap">
   <div class="drop" id="drop">
-    <div>拖入轨迹文件，或 <strong>点击选择</strong></div>
+    <div>拖入轨迹文件（可多选，按顺序首尾相连），或 <strong>点击选择</strong></div>
     <small>支持 .gpx / .kml / .tcx / .fit / .geojson / .csv — 全程本地处理，不上传</small>
   </div>
-  <input type="file" id="file" accept=".gpx,.kml,.tcx,.xml,.fit,.geojson,.json,.csv,.txt">
+  <input type="file" id="file" accept=".gpx,.kml,.tcx,.xml,.fit,.geojson,.json,.csv,.txt" multiple>
   <div class="info" id="info">尚未载入轨迹</div>
+  <div class="file-list" id="fileList"></div>
 
   <div class="main">
     <div class="stage">
@@ -203,7 +215,8 @@
 <script>
 const $=id=>document.getElementById(id);
 const CARD_SIZE=600;
-let trackPoints=null;
+let trackFiles=[];      // [{name,format,points}] 按列表顺序首尾拼接
+let trackPoints=null;   // = concatTrackPoints(trackFiles) 的派生结果
 
 /* ==================== 轨迹解析 ==================== */
 function parseFIT(buf){
@@ -421,6 +434,18 @@ function pointAtProgress(points, progress) {
   }
 
   return { x: points[points.length - 1].x, y: points[points.length - 1].y };
+}
+
+/* ==================== 多文件拼接 / 列表重排（core.mjs 权威，已 node:test 覆盖） ==================== */
+function concatTrackPoints(trackFiles){
+  if(!trackFiles.length) return null;
+  return trackFiles.flatMap(f=>f.points);
+}
+function reorderTrackFiles(files,act,i){
+  if(act==='del'){ if(i<0||i>=files.length) return [...files]; return files.filter((_,idx)=>idx!==i); }
+  if(act==='up'&&i>0&&i<files.length){ const r=[...files]; [r[i-1],r[i]]=[r[i],r[i-1]]; return r; }
+  if(act==='down'&&i>=0&&i<files.length-1){ const r=[...files]; [r[i],r[i+1]]=[r[i+1],r[i]]; return r; }
+  return [...files];
 }
 
 /* ==================== 渲染 ==================== */
@@ -645,22 +670,62 @@ async function exportMp4(){
 }
 
 /* ==================== 交互 ==================== */
-async function loadFile(file){
-  const res=await parseTrackFile(file);
-  if(!res){ $('info').innerHTML='无法解析该文件，请确认是有效的轨迹文件'; return; }
-  trackPoints=res.points;
+async function loadTrackFiles(files){
+  let added=0; const failed=[];
+  for(const file of files){
+    try{
+      const r=await parseTrackFile(file);
+      if(r){ trackFiles.push({name:file.name,format:r.format,points:r.points}); added++; }
+      else failed.push(file.name);
+    }catch(_){ failed.push(file.name); }
+  }
+  if(failed.length) alert('无法解析：\n'+failed.join('\n'));
+  if(added) recomputeTrack();
+}
+function recomputeTrack(){
+  trackPoints=concatTrackPoints(trackFiles);
+  if(!trackPoints){ clearTrack(); return; }
   const km=trackDistanceKm(trackPoints);
-  $('info').innerHTML=`已载入 <b>${res.format}</b> · <b>${trackPoints.length}</b> 个轨迹点 · 约 <b>${km.toFixed(1)}</b> km`;
+  $('info').innerHTML=`合并 <b>${trackFiles.length}</b> 个文件 · <b>${trackPoints.length}</b> 个轨迹点 · 约 <b>${km.toFixed(1)}</b> km`;
   $('expCard').disabled=false;
   if(mp4Supported()) $('expMp4').disabled=false;
+  renderFileList();
+  render();
+}
+function renderFileList(){
+  const el=$('fileList'); el.innerHTML='';
+  trackFiles.forEach((f,i)=>{
+    const row=document.createElement('div'); row.className='file-row';
+    row.innerHTML=`<span class="file-idx">${i+1}</span>`+
+      `<span class="file-name">${f.name}</span>`+
+      `<span class="file-meta">${f.format}·${f.points.length}</span>`+
+      `<span class="file-btns">`+
+        `<button data-act="up" data-i="${i}" ${i===0?'disabled':''}>↑</button>`+
+        `<button data-act="down" data-i="${i}" ${i===trackFiles.length-1?'disabled':''}>↓</button>`+
+        `<button data-act="del" data-i="${i}">✕</button>`+
+      `</span>`;
+    el.appendChild(row);
+  });
+}
+function trackFileAction(act,i){
+  trackFiles=reorderTrackFiles(trackFiles,act,i);
+  recomputeTrack();
+}
+function clearTrack(){
+  trackFiles=[]; trackPoints=null;
+  $('info').innerHTML='尚未载入轨迹';
+  $('expCard').disabled=true;
+  $('expMp4').disabled=true;
+  renderFileList();
   render();
 }
 const drop=$('drop');
 drop.onclick=()=>$('file').click();
-$('file').onchange=e=>{ if(e.target.files[0]) loadFile(e.target.files[0]); };
+$('file').onchange=e=>{ if(e.target.files.length) loadTrackFiles(Array.from(e.target.files)); e.target.value=''; };
 ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
-drop.addEventListener('drop',e=>{ if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+drop.addEventListener('drop',e=>{ if(e.dataTransfer.files.length) loadTrackFiles(Array.from(e.dataTransfer.files)); });
+$('fileList').addEventListener('click',e=>{ const b=e.target.closest('button[data-act]'); if(b) trackFileAction(b.dataset.act,+b.dataset.i); });
 
 // 选项联动
 const bind=(id,vid,fmt)=>{ const el=$(id); const upd=()=>{ if(vid)$(vid).textContent=fmt?fmt(el.value):el.value; render(); }; el.addEventListener('input',upd); upd(); };
