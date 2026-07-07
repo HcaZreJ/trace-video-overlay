@@ -24,6 +24,8 @@
   等比缩放全部样式参数（pad/lineWidth/radius/markerSize/dotSize）。
 - `renderCard`（DOM 驱动，预览+PNG）与 `renderFrame`（opts 驱动，MP4 逐帧）保持同构逻辑；
   改渲染行为时两处同步。
+- 尺寸滑块语义统一为「可见外径」（600 基准像素）：起终点标记与定位点同数值 → 屏上同大；
+  定位点内圆/白环系数 0.385/0.115（和为 0.5）。
 - 地图 overlay 对齐模型：底图与轨迹共享同一 world→canvas 仿射变换
   `canvasPx = (worldPx(mercZoom) − centerPx) × k + size/2`，k 由
   `computeOverlayScale` 连续计算——对齐靠数学，UI 控件只调取景。

@@ -40,6 +40,7 @@
       linear-gradient(45deg,transparent 75%,#2a2f37 75%),
       linear-gradient(-45deg,transparent 75%,#2a2f37 75%);
     background-size:12px 12px;background-position:0 0,0 6px,6px -6px,-6px 0;background-color:#20242b;
+    min-width:48px;min-height:48px;
     display:flex;align-items:center;justify-content:center}
   canvas#dot{display:block;width:56px;height:56px}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
@@ -98,7 +99,7 @@
       <div class="cardbox"><canvas id="card" width="600" height="600"></canvas></div>
       <div class="dotwrap">
         <div class="dotbox"><canvas id="dot" width="128" height="128"></canvas></div>
-        <div>单独的定位点<br>放进剪映后用位置关键帧让它沿线路移动</div>
+        <div>单独的定位点（右键 → 图片另存为 保存 PNG）<br>放进剪映后用位置关键帧让它沿线路移动</div>
       </div>
     </div>
 
@@ -142,8 +143,8 @@
         </div>
       </div>
       <div class="field">
-        <label>大小 <span id="markerSizeV">10</span></label>
-        <input type="range" id="markerSize" min="4" max="30" value="10">
+        <label>大小 <span id="markerSizeV">20</span></label>
+        <input type="range" id="markerSize" min="8" max="60" value="20">
       </div>
 
       <h2 style="margin-top:20px">定位点</h2>
@@ -153,8 +154,8 @@
           <input type="color" id="dotColor" value="#0a84ff">
         </div>
         <div class="field">
-          <label>大小 <span id="dotSizeV">96</span></label>
-          <input type="range" id="dotSize" min="8" max="256" value="96">
+          <label>大小 <span id="dotSizeV">75</span></label>
+          <input type="range" id="dotSize" min="8" max="200" value="75">
         </div>
       </div>
 
@@ -189,9 +190,17 @@
       </div>
       <div class="hint" id="mapOverlayStatus" style="display:none"></div>
 
+      <div class="field">
+        <label>导出分辨率（PNG 与 MP4 共用）</label>
+        <select id="exportRes">
+          <option value="720">720</option>
+          <option value="1080" selected>1080</option>
+          <option value="1440">1440</option>
+        </select>
+      </div>
+
       <div class="btns">
         <button class="exp" id="expCard" disabled>导出地图卡片 PNG</button>
-        <button class="exp sec" id="expDot">导出定位点 PNG</button>
       </div>
       <div class="hint">
         <b>剪映用法：</b>地图卡片当画中画放角落；把定位点也拖进去，沿线路打几个位置关键帧即可让它移动。不想动就只放地图卡片。
@@ -213,14 +222,6 @@
         </div>
       </div>
       <div class="row">
-        <div class="field">
-          <label>分辨率</label>
-          <select id="mp4Resolution">
-            <option value="720">720</option>
-            <option value="1080" selected>1080</option>
-            <option value="1440">1440</option>
-          </select>
-        </div>
         <div class="field">
           <label>背景模式</label>
           <select id="mp4BgMode">
@@ -760,12 +761,13 @@ function strokePath(ctx,proj,color,width){
   for(let i=1;i<proj.points.length;i++) ctx.lineTo(proj.points[i].x,proj.points[i].y);
   ctx.stroke();
 }
-function drawMarker(ctx,pt,color,r){
+function drawMarker(ctx,pt,color,size){
+  const r=size/2;
   ctx.beginPath(); ctx.arc(pt.x,pt.y,r,0,Math.PI*2);
   ctx.fillStyle=color; ctx.fill();
-  ctx.lineWidth=Math.max(2,r*0.35); ctx.strokeStyle='#fff'; ctx.stroke();
+  ctx.lineWidth=Math.max(2,size*0.175); ctx.strokeStyle='#fff'; ctx.stroke();
 }
-function renderCard(canvas,size){
+function renderCard(canvas,size,opts={}){
   const ctx=canvas.getContext('2d');
   canvas.width=canvas.height=size;
   ctx.clearRect(0,0,size,size);
@@ -794,6 +796,17 @@ function renderCard(canvas,size){
       drawMarker(ctx,proj.points[0],$('startColor').value,mr);
       drawMarker(ctx,proj.points.at(-1),$('endColor').value,mr);
     }
+    if(opts.previewDot){
+      const p = pointAtProgress(proj.points, 0.5);
+      if(p){
+        const d = +$('dotSize').value * scale, r = d*0.385, ring = d*0.115;
+        ctx.save();
+        ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=d*0.08; ctx.shadowOffsetY=d*0.02;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r+ring, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+        ctx.restore();
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
+      }
+    }
     ctx.restore();
     return;
   }
@@ -811,14 +824,27 @@ function renderCard(canvas,size){
     drawMarker(ctx,proj.points[0],$('startColor').value,mr);
     drawMarker(ctx,proj.points.at(-1),$('endColor').value,mr);
   }
+  if(opts.previewDot){
+    const p = pointAtProgress(proj.points, 0.5);
+    if(p){
+      const d = +$('dotSize').value * scale, r = d*0.385, ring = d*0.115;
+      ctx.save();
+      ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=d*0.08; ctx.shadowOffsetY=d*0.02;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r+ring, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
+    }
+  }
   ctx.restore();
   ctx.restore();
 }
 function renderDot(canvas,size){
   const ctx=canvas.getContext('2d');
-  canvas.width=canvas.height=size;
-  ctx.clearRect(0,0,size,size);
-  const c=size/2, r=size*0.30, ring=size*0.09;
+  const pad=Math.ceil(size*0.08);
+  const full=size+2*pad;
+  canvas.width=canvas.height=full;
+  ctx.clearRect(0,0,full,full);
+  const c=full/2, r=size*0.385, ring=size*0.115;
   ctx.save();
   ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=size*0.08; ctx.shadowOffsetY=size*0.02;
   ctx.beginPath(); ctx.arc(c,c,r+ring,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
@@ -870,7 +896,7 @@ function renderFrame(ctx,size,progress,opts){
   // 定位点：仿 renderDot（白环 + 彩色心 + 阴影），直径随 dotSize*scale
   const p=pointAtProgress(proj.points,progress);
   if(p){
-    const d=opts.dotSize*scale, r=d*0.30, ring=d*0.09;
+    const d=opts.dotSize*scale, r=d*0.385, ring=d*0.115;
     ctx.save();
     ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=d*0.08; ctx.shadowOffsetY=d*0.02;
     ctx.beginPath(); ctx.arc(p.x,p.y,r+ring,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
@@ -881,12 +907,16 @@ function renderFrame(ctx,size,progress,opts){
 }
 function render(){
   try {
-    renderCard($('card'),CARD_SIZE);
+    renderCard($('card'),CARD_SIZE,{previewDot:true});
   } catch(err) {
     console.error(err);
     setMapStatus(`渲染失败：${err.message}`,'error');
   }
-  renderDot($('dot'),+$('dotSize').value);
+  const dotExportPx = Math.round(+$('dotSize').value * (+$('exportRes').value||1080) / CARD_SIZE);
+  renderDot($('dot'), dotExportPx);
+  const dispScale = ($('card').clientWidth||360) / CARD_SIZE;
+  const dispPx = Math.max(1, Math.round(+$('dotSize').value * dispScale * 1.16)); // ×1.16 与 canvas 留边一致
+  $('dot').style.width = $('dot').style.height = dispPx + 'px';
 }
 
 /* ==================== 地图 overlay UI ==================== */
@@ -953,17 +983,13 @@ async function exportCard(){
   }
   const c=document.createElement('canvas');
   try {
-    renderCard(c,CARD_SIZE);
+    renderCard(c,+$('exportRes').value||1080);
   } catch(err) {
     console.error(err);
     setMapStatus(`导出失败：${err.message}`,'error');
     return;
   }
   download(c,'轨迹卡片.png');
-}
-function exportDot(){
-  const c=document.createElement('canvas'); renderDot(c,+$('dotSize').value);
-  download(c,'定位点.png');
 }
 
 /* ---- MP4 动画导出（WebCodecs + vendored mp4-muxer） ---- */
@@ -1020,7 +1046,7 @@ async function exportMp4(){
   const btn=$('expMp4');
   const duration=Math.max(0.1,+$('mp4Duration').value||6);
   const fps=Math.max(1,+$('mp4Fps').value||30);
-  const size=+$('mp4Resolution').value||1080;
+  const size=+$('exportRes').value||1080;
   const frames=Math.max(1,Math.round(duration*fps));
   const opts=buildFrameOpts();
   const bitrate=MP4_BITRATE[size]||1.2e7;
@@ -1157,8 +1183,8 @@ bind('markerSize','markerSizeV');
 ['lineColor','bgColor','startColor','endColor','dotColor','showMarkers'].forEach(id=>$(id).addEventListener('input',render));
 
 $('expCard').onclick=exportCard;
-$('expDot').onclick=exportDot;
 $('expMp4').onclick=exportMp4;
+$('exportRes').addEventListener('change',render);
 $('mp4BgMode').addEventListener('change',()=>{
   const green=$('mp4BgMode').value==='green';
   $('mp4PageColorField').style.display=green?'none':'';
