@@ -47,6 +47,11 @@
   .field{margin-bottom:14px}
   .field label{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:5px}
   .field label span{color:var(--fg)}
+  .field small{display:block;color:var(--dim);margin-top:4px;font-size:11px}
+  .field small a{color:var(--accent)}
+  input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
+    background:#0d0f12;color:var(--fg);font-size:13px}
+  input[type=text]:disabled{opacity:.4;cursor:not-allowed}
   input[type=range]{width:100%}
   input[type=color]{width:100%;height:32px;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer;padding:2px}
   .row{display:flex;gap:10px}
@@ -136,6 +141,10 @@
           <input type="color" id="endColor" value="#ff453a">
         </div>
       </div>
+      <div class="field">
+        <label>大小 <span id="markerSizeV">10</span></label>
+        <input type="range" id="markerSize" min="4" max="30" value="10">
+      </div>
 
       <h2 style="margin-top:20px">定位点</h2>
       <div class="row">
@@ -145,9 +154,40 @@
         </div>
         <div class="field">
           <label>大小 <span id="dotSizeV">96</span></label>
-          <input type="range" id="dotSize" min="32" max="256" value="96">
+          <input type="range" id="dotSize" min="8" max="256" value="96">
         </div>
       </div>
+
+      <h2 style="margin-top:20px">地图 overlay</h2>
+      <label class="check"><input type="checkbox" id="mapOverlay"> 开启地图底图 overlay</label>
+      <div class="field">
+        <label>高德 Web 服务 API Key</label>
+        <input type="text" id="amapKey" placeholder="高德 Web 服务 API Key" disabled>
+        <small><a href="https://console.amap.com/dev/key/app" target="_blank" rel="noopener">→ 前往高德开放平台申请 key</a></small>
+      </div>
+      <label class="check"><input type="checkbox" id="mapTraffic" disabled> 显示实时路况</label>
+      <div class="field">
+        <label>底图样式</label>
+        <div class="row">
+          <label class="check"><input type="radio" name="mapOverlayMode" value="none" checked disabled> 地图铺满</label>
+          <label class="check"><input type="radio" name="mapOverlayMode" value="mask" disabled> 地图 + 黑蒙层</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>蒙层透明度 <span id="mapMaskOpacityV">30%</span></label>
+        <input type="range" id="mapMaskOpacity" min="0" max="80" value="30" disabled>
+      </div>
+      <div class="field">
+        <label>取景缩放 <span id="mapViewScaleV">1.00×</span></label>
+        <input type="range" id="mapViewScale" min="0.5" max="1.5" value="1" step="0.05" disabled>
+        <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">
+          调整轨迹在卡片中的占比，底图与轨迹同步缩放、贴合关系保持；拉小可能露出底图边界（边界外为卡片背景）。
+        </small>
+      </div>
+      <div class="btns">
+        <button class="exp sec" id="mapPreview" disabled>预览地图 overlay</button>
+      </div>
+      <div class="hint" id="mapOverlayStatus" style="display:none"></div>
 
       <div class="btns">
         <button class="exp" id="expCard" disabled>导出地图卡片 PNG</button>
@@ -217,6 +257,12 @@ const $=id=>document.getElementById(id);
 const CARD_SIZE=600;
 let trackFiles=[];      // [{name,format,points}] 按列表顺序首尾拼接
 let trackPoints=null;   // = concatTrackPoints(trackFiles) 的派生结果
+// 地图 overlay 状态：null 表示未开启（默认）。开启时字段：
+// { basemapImage, mapCenter, mapZoom, spanPx, contentSize, viewScale,
+//   overlayMode: 'none'|'mask', overlayMaskOpacity: 0..1 }
+// 挂在 window 上（而非纯 let 局部变量）便于浏览器控制台手测
+window.mapOverlayState = null;
+let mapOverlayNeedsRefresh = false;  // 参数变化但还没预览时为 true
 
 /* ==================== 轨迹解析 ==================== */
 function parseFIT(buf){
@@ -355,28 +401,283 @@ function extractTextCoords(text){
   return out;
 }
 
-/* ==================== 几何（复用主 repo，已 node:test 覆盖） ==================== */
+/* ==================== Web Mercator 投影（core.mjs 权威，已 node:test 覆盖） ==================== */
 function mercatorX(lon){ return lon*(Math.PI/180)*6378137; }
 function mercatorY(lat){ const r=lat*(Math.PI/180); return 6378137*Math.log(Math.tan(Math.PI/4+r/2)); }
-function smoothTrack(points,target){
-  if(points.length>=target||points.length<3) return points;
-  const per=Math.ceil(target/(points.length-1));
-  const w=[...points];
-  w.unshift({lng:points[0].lng*2-points[1].lng,lat:points[0].lat*2-points[1].lat});
-  w.push({lng:points.at(-1).lng*2-points.at(-2).lng,lat:points.at(-1).lat*2-points.at(-2).lat});
-  const r=[];
-  for(let i=1;i<w.length-2;i++){
-    const p0=w[i-1],p1=w[i],p2=w[i+1],p3=w[i+2];
-    for(let t=0;t<per;t++){
-      const tt=t/per,t2=tt*tt,t3=t2*tt;
-      r.push({
-        lng:0.5*((2*p1.lng)+(-p0.lng+p2.lng)*tt+(2*p0.lng-5*p1.lng+4*p2.lng-p3.lng)*t2+(-p0.lng+3*p1.lng-3*p2.lng+p3.lng)*t3),
-        lat:0.5*((2*p1.lat)+(-p0.lat+p2.lat)*tt+(2*p0.lat-5*p1.lat+4*p2.lat-p3.lat)*t2+(-p0.lat+3*p1.lat-3*p2.lat+p3.lat)*t3),
-      });
+
+/* ==================== WGS84 → GCJ-02 坐标转换（core.mjs 权威，已 node:test 覆盖） ==================== */
+const GCJ_A = 6378245.0;
+const GCJ_EE = 0.00669342162296594323;
+
+function gcjOutOfChina(lng, lat) {
+  return lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+}
+
+function gcjTransformLat(x, y) {
+  let ret = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  ret += (20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2 / 3;
+  ret += (20 * Math.sin(y * Math.PI) + 40 * Math.sin(y / 3 * Math.PI)) * 2 / 3;
+  ret += (160 * Math.sin(y / 12 * Math.PI) + 320 * Math.sin(y * Math.PI / 30)) * 2 / 3;
+  return ret;
+}
+
+function gcjTransformLng(x, y) {
+  let ret = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  ret += (20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2 / 3;
+  ret += (20 * Math.sin(x * Math.PI) + 40 * Math.sin(x / 3 * Math.PI)) * 2 / 3;
+  ret += (150 * Math.sin(x / 12 * Math.PI) + 300 * Math.sin(x / 30 * Math.PI)) * 2 / 3;
+  return ret;
+}
+function wgs84ToGcj02(lng, lat) {
+  if (typeof lng !== 'number' || !Number.isFinite(lng) || typeof lat !== 'number' || !Number.isFinite(lat)) {
+    throw new TypeError('wgs84ToGcj02: lng/lat must be finite numbers');
+  }
+  if (gcjOutOfChina(lng, lat)) return { lng, lat };
+
+  const x = lng - 105, y = lat - 35;
+  let dLat = gcjTransformLat(x, y);
+  let dLng = gcjTransformLng(x, y);
+
+  const radLat = lat * Math.PI / 180;
+  const magic = 1 - GCJ_EE * Math.sin(radLat) * Math.sin(radLat);
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180) / ((GCJ_A * (1 - GCJ_EE)) / (magic * sqrtMagic) * Math.PI);
+  dLng = (dLng * 180) / (GCJ_A / sqrtMagic * Math.cos(radLat) * Math.PI);
+
+  return { lng: lng + dLng, lat: lat + dLat };
+}
+
+/* ==================== 高德静图墨卡托像素 + 静图请求参数（core.mjs 权威，已 node:test 覆盖） ==================== */
+// 高德静图按 512px tile 渲染：zoom=N 的地面分辨率 = 标准 256px Web Mercator 的 N+1。
+// 涉及像素的计算统一换算 mercZoom = amapZoom + AMAP_STATIC_ZOOM_BIAS。
+// 输入必须已是 GCJ-02 坐标（境内数据先经 wgs84ToGcj02 转换），本节函数不做坐标系转换。
+const AMAP_STATIC_ZOOM_BIAS = 1;
+const AMAP_MERCATOR_LAT_LIMIT = 85.05112878;
+
+function computeOverlayScale(spanPx, canvasSize, padPx, viewScale) {
+  if (typeof spanPx !== 'number' || !Number.isFinite(spanPx) || spanPx < 0) {
+    throw new RangeError('computeOverlayScale: spanPx must be a non-negative finite number');
+  }
+  if (typeof canvasSize !== 'number' || !Number.isFinite(canvasSize) || canvasSize <= 0) {
+    throw new RangeError('computeOverlayScale: canvasSize must be a positive finite number');
+  }
+  if (typeof padPx !== 'number' || !Number.isFinite(padPx) || padPx < 0 || 2 * padPx >= canvasSize) {
+    throw new RangeError('computeOverlayScale: padPx must be a non-negative finite number with 2*padPx < canvasSize');
+  }
+  if (typeof viewScale !== 'number' || !Number.isFinite(viewScale) || viewScale <= 0) {
+    throw new RangeError('computeOverlayScale: viewScale must be a positive finite number');
+  }
+  return viewScale * (canvasSize - 2 * padPx) / Math.max(spanPx, 1);
+}
+
+function computeBasemapDrawRect(canvasSize, contentSize, k) {
+  if (typeof canvasSize !== 'number' || !Number.isFinite(canvasSize) || canvasSize <= 0) {
+    throw new RangeError('computeBasemapDrawRect: canvasSize must be a positive finite number');
+  }
+  if (typeof contentSize !== 'number' || !Number.isFinite(contentSize) || contentSize <= 0) {
+    throw new RangeError('computeBasemapDrawRect: contentSize must be a positive finite number');
+  }
+  if (typeof k !== 'number' || !Number.isFinite(k) || k <= 0) {
+    throw new RangeError('computeBasemapDrawRect: k must be a positive finite number');
+  }
+  const w = contentSize * k;
+  const h = w;
+  const x = canvasSize / 2 - w / 2;
+  const y = x;
+  return { x, y, w, h };
+}
+
+function lngLatToAmapPixel(lng, lat, zoom) {
+  if (!Number.isInteger(zoom) || zoom < 1 || zoom > 18) {
+    throw new RangeError('lngLatToAmapPixel: zoom must be an integer in [1,18]');
+  }
+  if (lat > AMAP_MERCATOR_LAT_LIMIT || lat < -AMAP_MERCATOR_LAT_LIMIT) {
+    throw new RangeError('lngLatToAmapPixel: lat out of Mercator range');
+  }
+  const worldPx = 256 * Math.pow(2, zoom);
+  const x = (lng + 180) / 360 * worldPx;
+  const siny = Math.sin(lat * Math.PI / 180);
+  const y = (0.5 - Math.log((1 + siny) / (1 - siny)) / (4 * Math.PI)) * worldPx;
+  return { x, y };
+}
+
+function computeAmapView(bboxGcj02, sizePx) {
+  const b = bboxGcj02 || {};
+  if (
+    typeof b.lngMin !== 'number' || typeof b.lngMax !== 'number' ||
+    typeof b.latMin !== 'number' || typeof b.latMax !== 'number'
+  ) {
+    throw new TypeError('computeAmapView: bboxGcj02 must have numeric lngMin/lngMax/latMin/latMax');
+  }
+  const { lngMin, lngMax, latMin, latMax } = b;
+  if (lngMin > lngMax || latMin > latMax) {
+    throw new RangeError('computeAmapView: bbox is reversed (min > max)');
+  }
+  if (typeof sizePx !== 'number' || !Number.isFinite(sizePx) || sizePx <= 0) {
+    throw new RangeError('computeAmapView: sizePx must be a positive number');
+  }
+
+  const center = { lng: (lngMin + lngMax) / 2, lat: (latMin + latMax) / 2 };
+  if (lngMin === lngMax && latMin === latMax) {
+    return { center: { lng: lngMin, lat: latMin }, zoom: 15, spanPx: 0 };
+  }
+
+  let fallbackSpanPx = 0;
+  for (let zoom = 17; zoom >= 1; zoom--) {
+    const mercZoom = zoom + AMAP_STATIC_ZOOM_BIAS;
+    const pMin = lngLatToAmapPixel(lngMin, latMin, mercZoom);
+    const pMax = lngLatToAmapPixel(lngMax, latMax, mercZoom);
+    const dxPx = Math.abs(pMax.x - pMin.x);
+    const dyPx = Math.abs(pMax.y - pMin.y);
+    const spanPx = Math.max(dxPx, dyPx);
+    if (spanPx * 1.4 <= sizePx) {
+      return { center, zoom, spanPx };
+    }
+    fallbackSpanPx = spanPx;
+  }
+  return { center, zoom: 1, spanPx: fallbackSpanPx };
+}
+
+function buildAmapStaticUrl(params) {
+  const p = params || {};
+  const { key, center, zoom, size, scale, traffic } = p;
+
+  if (typeof key !== 'string' || key === '') {
+    throw new TypeError('buildAmapStaticUrl: key must be a non-empty string');
+  }
+  if (!Number.isInteger(size) || size <= 0 || size > 1024) {
+    throw new RangeError('buildAmapStaticUrl: size must be an integer in (0,1024]');
+  }
+  if (scale !== undefined && scale !== 1 && scale !== 2) {
+    throw new RangeError('buildAmapStaticUrl: scale must be 1 or 2');
+  }
+  if (traffic !== undefined && traffic !== 0 && traffic !== 1) {
+    throw new RangeError('buildAmapStaticUrl: traffic must be 0 or 1');
+  }
+  if (!Number.isInteger(zoom) || zoom < 1 || zoom > 17) {
+    throw new RangeError('buildAmapStaticUrl: zoom must be an integer in [1,17]');
+  }
+
+  let url = `https://restapi.amap.com/v3/staticmap?key=${key}&location=${center.lng.toFixed(6)},${center.lat.toFixed(6)}&zoom=${zoom}&size=${size}*${size}`;
+  if (scale !== undefined) url += `&scale=${scale}`;
+  if (traffic !== undefined) url += `&traffic=${traffic}`;
+  return url;
+}
+
+/* ==================== 组合层：轨迹 → 高德底图 URL / 与地图对齐的轨迹投影（core.mjs 权威，已 node:test 覆盖） ==================== */
+// 上层入口：把 WGS84 轨迹（GPS 原始数据）与高德静图桥接。内部串联
+// wgs84ToGcj02 + computeAmapView + buildAmapStaticUrl + lngLatToAmapPixel。
+function computeAmapUrlForTrack(pointsWgs84, size, key, scale, traffic) {
+  if (!Array.isArray(pointsWgs84) || pointsWgs84.length === 0) {
+    throw new TypeError('computeAmapUrlForTrack: pointsWgs84 must be a non-empty array');
+  }
+  const gcjPoints = pointsWgs84.map(p => wgs84ToGcj02(p.lng, p.lat));
+  const lngs = gcjPoints.map(p => p.lng);
+  const lats = gcjPoints.map(p => p.lat);
+  const bbox = {
+    lngMin: Math.min(...lngs),
+    lngMax: Math.max(...lngs),
+    latMin: Math.min(...lats),
+    latMax: Math.max(...lats),
+  };
+  const { center, zoom, spanPx } = computeAmapView(bbox, size);
+  const url = buildAmapStaticUrl({ key, center, zoom, size, scale, traffic });
+  return { url, center, zoom, spanPx };
+}
+
+function projectTrackOnAmap(pointsWgs84, size, center, amapZoom, k) {
+  if (!Array.isArray(pointsWgs84) || pointsWgs84.length === 0) {
+    throw new TypeError('projectTrackOnAmap: pointsWgs84 must be a non-empty array');
+  }
+  if (!center || typeof center !== 'object' || typeof center.lng !== 'number' || typeof center.lat !== 'number') {
+    throw new TypeError('projectTrackOnAmap: center must be an object with numeric lng/lat');
+  }
+  if (!Number.isInteger(amapZoom) || amapZoom < 1 || amapZoom > 17) {
+    throw new RangeError('projectTrackOnAmap: amapZoom must be an integer in [1,17]');
+  }
+  if (typeof k !== 'number' || !Number.isFinite(k) || k <= 0) {
+    throw new RangeError('projectTrackOnAmap: k must be a positive finite number');
+  }
+  const mercZoom = amapZoom + AMAP_STATIC_ZOOM_BIAS;
+  const smoothed = smoothTrack(pointsWgs84, 500);
+  const centerPx = lngLatToAmapPixel(center.lng, center.lat, mercZoom);
+  const points = smoothed.map(p => {
+    const gcj = wgs84ToGcj02(p.lng, p.lat);
+    const worldPx = lngLatToAmapPixel(gcj.lng, gcj.lat, mercZoom);
+    return {
+      x: (worldPx.x - centerPx.x) * k + size / 2,
+      y: (worldPx.y - centerPx.y) * k + size / 2,
+    };
+  });
+  return { points, fullSize: size };
+}
+
+/* ==================== 高德静图 fetch 层（浏览器运行时：Image + 内存缓存 + 超时） ==================== */
+// 恒 size=1024、scale=2；静图内容视野恒等于 1024 世界像素 → contentSize=1024。
+const amapBasemapCache = new Map();
+async function fetchAmapBasemap({ pointsWgs84, key, traffic }){
+  const { url, center, zoom, spanPx } = computeAmapUrlForTrack(pointsWgs84, 1024, key, 2, traffic);
+  if(amapBasemapCache.has(url)) return { image: amapBasemapCache.get(url), center, zoom, spanPx, contentSize: 1024, url };
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    let settled = false;
+    const timer = setTimeout(() => {
+      if(settled) return;
+      settled = true;
+      img.src = '';
+      const err = new Error('fetchAmapBasemap: timed out loading basemap image');
+      err.code = 'fetch_failed';
+      reject(err);
+    }, 15000);
+    img.onload = () => {
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      amapBasemapCache.set(url, img);
+      resolve({ image: img, center, zoom, spanPx, contentSize: 1024, url });
+    };
+    img.onerror = () => {
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      const err = new Error('fetchAmapBasemap: failed to load basemap image');
+      err.code = 'fetch_failed';
+      reject(err);
+    };
+    img.src = url;
+  });
+}
+
+/* ==================== Catmull-Rom 平滑插值（core.mjs 权威，已 node:test 覆盖） ==================== */
+// 在稀疏点之间补点，消除折线尖角。点数已足够则原样返回。
+function smoothTrack(points, targetCount) {
+  if (points.length >= targetCount || points.length < 3) return points;
+  const perSegment = Math.ceil(targetCount / (points.length - 1));
+
+  // 补两个镜像端点用于边界切线计算
+  const wrap = [...points];
+  wrap.unshift({ lng: points[0].lng * 2 - points[1].lng, lat: points[0].lat * 2 - points[1].lat });
+  wrap.push({
+    lng: points[points.length - 1].lng * 2 - points[points.length - 2].lng,
+    lat: points[points.length - 1].lat * 2 - points[points.length - 2].lat,
+  });
+
+  const result = [];
+  for (let i = 1; i < wrap.length - 2; i++) {
+    const p0 = wrap[i - 1], p1 = wrap[i], p2 = wrap[i + 1], p3 = wrap[i + 2];
+    const steps = (i === wrap.length - 3) ? perSegment : perSegment; // 每段统一补点
+    for (let t = 0; t < steps; t++) {
+      const tt = t / steps;
+      const tt2 = tt * tt, tt3 = tt2 * tt;
+      const lng = 0.5 * ((2 * p1.lng) + (-p0.lng + p2.lng) * tt + (2 * p0.lng - 5 * p1.lng + 4 * p2.lng - p3.lng) * tt2 + (-p0.lng + 3 * p1.lng - 3 * p2.lng + p3.lng) * tt3);
+      const lat = 0.5 * ((2 * p1.lat) + (-p0.lat + p2.lat) * tt + (2 * p0.lat - 5 * p1.lat + 4 * p2.lat - p3.lat) * tt2 + (-p0.lat + 3 * p1.lat - 3 * p2.lat + p3.lat) * tt3);
+      result.push({ lng, lat });
     }
   }
-  r.push({...points.at(-1)});
-  return r;
+  // 确保终点被包含
+  result.push({ ...points[points.length - 1] });
+  return result;
 }
 function projectTrack(points,fullSize){
   const sm=smoothTrack(points,500);
@@ -474,6 +775,29 @@ function renderCard(canvas,size){
   const pad=+$('pad').value*scale;
   const lineWidth=+$('lineWidth').value*scale;
 
+  const overlay=window.mapOverlayState;
+  if(overlay){
+    // 地图 overlay 模式：底图与轨迹共享同一 world→canvas 仿射变换 k，对齐靠数学保证。
+    const k = computeOverlayScale(overlay.spanPx, size, pad, overlay.viewScale);
+    const rect = computeBasemapDrawRect(size, overlay.contentSize, k);
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
+    ctx.drawImage(overlay.basemapImage, rect.x, rect.y, rect.w, rect.h);
+    if(overlay.overlayMode==='mask'){
+      ctx.fillStyle=`rgba(0,0,0,${overlay.overlayMaskOpacity})`;
+      ctx.fillRect(0,0,size,size);
+    }
+    const proj = projectTrackOnAmap(trackPoints,size,overlay.mapCenter,overlay.mapZoom,k);
+    strokePath(ctx,proj,$('lineColor').value,lineWidth);
+    if($('showMarkers').checked){
+      const mr=+$('markerSize').value*scale;
+      drawMarker(ctx,proj.points[0],$('startColor').value,mr);
+      drawMarker(ctx,proj.points.at(-1),$('endColor').value,mr);
+    }
+    ctx.restore();
+    return;
+  }
+
   ctx.save();
   ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
   ctx.fillStyle=hexToRgba($('bgColor').value,+$('bgOpacity').value/100);
@@ -483,7 +807,7 @@ function renderCard(canvas,size){
   ctx.save(); ctx.translate(pad,pad);
   strokePath(ctx,proj,$('lineColor').value,lineWidth);
   if($('showMarkers').checked){
-    const mr=Math.max(lineWidth*0.9,7*scale);
+    const mr=+$('markerSize').value*scale;
     drawMarker(ctx,proj.points[0],$('startColor').value,mr);
     drawMarker(ctx,proj.points.at(-1),$('endColor').value,mr);
   }
@@ -515,18 +839,31 @@ function renderFrame(ctx,size,progress,opts){
   ctx.fillRect(0,0,size,size);
 
   ctx.save();
-  if(opts.bgMode!=='green'){
-    // 卡片模式：圆角裁剪 + 叠半透明卡片底，线路/标记/定位点都画在圆角内
+  let proj;
+  if(opts.bgMode!=='green'&&opts.basemapImage){
+    // 卡片模式 + 地图底图：底图与轨迹共享同一 world→canvas 仿射变换 k，对齐靠数学保证。
+    const k = computeOverlayScale(opts.spanPx, size, pad, opts.viewScale);
+    const rect = computeBasemapDrawRect(size, opts.contentSize, k);
     ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
-    ctx.fillStyle=hexToRgba(opts.bgColor,opts.bgOpacity);
-    ctx.fillRect(0,0,size,size);
+    ctx.drawImage(opts.basemapImage, rect.x, rect.y, rect.w, rect.h);
+    if(opts.overlayMode==='mask'){
+      ctx.fillStyle=`rgba(0,0,0,${opts.overlayMaskOpacity})`;
+      ctx.fillRect(0,0,size,size);
+    }
+    proj = projectTrackOnAmap(trackPoints,size,opts.mapCenter,opts.mapZoom,k);
+  } else {
+    if(opts.bgMode!=='green'){
+      // 卡片模式：圆角裁剪 + 叠半透明卡片底，线路/标记/定位点都画在圆角内
+      ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
+      ctx.fillStyle=hexToRgba(opts.bgColor,opts.bgOpacity);
+      ctx.fillRect(0,0,size,size);
+    }
+    proj=projectTrack(trackPoints,size-2*pad);
+    ctx.translate(pad,pad);
   }
-
-  const proj=projectTrack(trackPoints,size-2*pad);
-  ctx.translate(pad,pad);
   strokePath(ctx,proj,opts.lineColor,lineWidth);
   if(opts.showMarkers){
-    const mr=Math.max(lineWidth*0.9,7*scale);
+    const mr=opts.markerSize*scale;
     drawMarker(ctx,proj.points[0],opts.startColor,mr);
     drawMarker(ctx,proj.points.at(-1),opts.endColor,mr);
   }
@@ -543,9 +880,63 @@ function renderFrame(ctx,size,progress,opts){
   ctx.restore();
 }
 function render(){
-  renderCard($('card'),CARD_SIZE);
+  try {
+    renderCard($('card'),CARD_SIZE);
+  } catch(err) {
+    console.error(err);
+    setMapStatus(`渲染失败：${err.message}`,'error');
+  }
   renderDot($('dot'),+$('dotSize').value);
 }
+
+/* ==================== 地图 overlay UI ==================== */
+function setMapStatus(msg, kind){
+  const el = $('mapOverlayStatus');
+  if(!msg || kind === 'clear'){ el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = '';
+  el.textContent = msg;
+  el.style.color = kind === 'error' ? '#ff453a' : kind === 'warn' ? '#ff9f0a' : kind === 'ok' ? '#34c759' : 'var(--dim)';
+}
+function markOverlayNeedsRefresh(){
+  mapOverlayNeedsRefresh = true;
+  if($('mapOverlay').checked && window.mapOverlayState){
+    setMapStatus('参数已变，点「预览地图 overlay」重新拉取底图', 'warn');
+  }
+}
+async function onPreviewMapOverlay(){
+  const key = ($('amapKey').value || '').trim();
+  if(!key){ setMapStatus('请先填写高德 API Key', 'error'); return; }
+  if(!trackPoints || trackPoints.length === 0){ setMapStatus('请先载入轨迹', 'error'); return; }
+  const btn = $('mapPreview');
+  btn.disabled = true; setMapStatus('正在拉取底图…', 'info');
+  try {
+    const result = await fetchAmapBasemap({
+      pointsWgs84: trackPoints,
+      key,
+      traffic: $('mapTraffic').checked ? 1 : undefined,
+    });
+    window.mapOverlayState = {
+      basemapImage: result.image,
+      mapCenter: result.center,
+      mapZoom: result.zoom,
+      spanPx: result.spanPx,
+      contentSize: result.contentSize,
+      viewScale: +$('mapViewScale').value,
+      overlayMode: document.querySelector('input[name=mapOverlayMode]:checked').value,
+      overlayMaskOpacity: (+$('mapMaskOpacity').value) / 100,
+    };
+    mapOverlayNeedsRefresh = false;
+    setMapStatus(`✓ 底图已加载（zoom=${result.zoom}）`, 'ok');
+    render();
+  } catch(err){
+    window.mapOverlayState = null;
+    setMapStatus(`底图加载失败：${err.message}`, 'error');
+    render();
+  } finally {
+    btn.disabled = false;
+  }
+}
+$('mapPreview').addEventListener('click', onPreviewMapOverlay);
 
 /* ==================== 导出 ==================== */
 function download(canvas,filename){
@@ -555,9 +946,19 @@ function download(canvas,filename){
     a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   },'image/png');
 }
-function exportCard(){
+async function exportCard(){
   if(!trackPoints) return;
-  const c=document.createElement('canvas'); renderCard(c,CARD_SIZE);
+  if($('mapOverlay').checked && (!window.mapOverlayState || mapOverlayNeedsRefresh)){
+    try { await onPreviewMapOverlay(); } catch(_) { /* onPreviewMapOverlay 已内部 catch，这里无 throw */ }
+  }
+  const c=document.createElement('canvas');
+  try {
+    renderCard(c,CARD_SIZE);
+  } catch(err) {
+    console.error(err);
+    setMapStatus(`导出失败：${err.message}`,'error');
+    return;
+  }
   download(c,'轨迹卡片.png');
 }
 function exportDot(){
@@ -583,10 +984,19 @@ function buildFrameOpts(){
     bgOpacity:+$('bgOpacity').value/100,
     lineColor:$('lineColor').value,
     showMarkers:$('showMarkers').checked,
+    markerSize:+$('markerSize').value,
     startColor:$('startColor').value,
     endColor:$('endColor').value,
     dotColor:$('dotColor').value,
     dotSize:+$('dotSize').value,
+    basemapImage: window.mapOverlayState ? window.mapOverlayState.basemapImage : null,
+    mapCenter: window.mapOverlayState ? window.mapOverlayState.mapCenter : null,
+    mapZoom: window.mapOverlayState ? window.mapOverlayState.mapZoom : null,
+    spanPx: window.mapOverlayState ? window.mapOverlayState.spanPx : 0,
+    contentSize: window.mapOverlayState ? window.mapOverlayState.contentSize : 1024,
+    viewScale: window.mapOverlayState ? window.mapOverlayState.viewScale : 1,
+    overlayMode: window.mapOverlayState ? window.mapOverlayState.overlayMode : 'none',
+    overlayMaskOpacity: window.mapOverlayState ? window.mapOverlayState.overlayMaskOpacity : 0,
   };
 }
 async function pickMp4Codec(size,fps){
@@ -604,6 +1014,9 @@ async function pickMp4Codec(size,fps){
 }
 async function exportMp4(){
   if(!trackPoints||!mp4Supported()) return;
+  if($('mapOverlay').checked && (!window.mapOverlayState || mapOverlayNeedsRefresh)){
+    try { await onPreviewMapOverlay(); } catch(_) { /* onPreviewMapOverlay 已内部 catch，这里无 throw */ }
+  }
   const btn=$('expMp4');
   const duration=Math.max(0.1,+$('mp4Duration').value||6);
   const fps=Math.max(1,+$('mp4Fps').value||30);
@@ -690,7 +1103,13 @@ function recomputeTrack(){
   $('expCard').disabled=false;
   if(mp4Supported()) $('expMp4').disabled=false;
   renderFileList();
+  if(window.mapOverlayState){
+    // 换轨迹后旧底图与新轨迹不再对应：立即降级为无底图渲染，提示重新预览
+    window.mapOverlayState=null;
+    setMapStatus('轨迹已变，点「预览地图 overlay」重新拉取底图','warn');
+  }
   render();
+  markOverlayNeedsRefresh();
 }
 function renderFileList(){
   const el=$('fileList'); el.innerHTML='';
@@ -734,6 +1153,7 @@ bind('bgOpacity','bgOpacityV',v=>v+'%');
 bind('radius','radiusV');
 bind('pad','padV');
 bind('dotSize','dotSizeV');
+bind('markerSize','markerSizeV');
 ['lineColor','bgColor','startColor','endColor','dotColor','showMarkers'].forEach(id=>$(id).addEventListener('input',render));
 
 $('expCard').onclick=exportCard;
@@ -744,7 +1164,58 @@ $('mp4BgMode').addEventListener('change',()=>{
   $('mp4PageColorField').style.display=green?'none':'';
   $('mp4GreenColorField').style.display=green?'':'none';
 });
+
+// 地图 overlay 控件
+const savedKey = localStorage.getItem('amap_key') || '';
+$('amapKey').value = savedKey;
+$('amapKey').addEventListener('input', () => {
+  localStorage.setItem('amap_key', $('amapKey').value.trim());
+  markOverlayNeedsRefresh();
+});
+$('mapTraffic').addEventListener('change', markOverlayNeedsRefresh);
+$('mapViewScale').addEventListener('input', () => {
+  const v = +$('mapViewScale').value;
+  $('mapViewScaleV').textContent = v.toFixed(2) + '×';
+  if(window.mapOverlayState){
+    window.mapOverlayState.viewScale = v;
+    render();
+  }
+});
+$('mapOverlay').addEventListener('change', () => {
+  const on = $('mapOverlay').checked;
+  $('amapKey').disabled = !on;
+  $('mapTraffic').disabled = !on;
+  $('mapMaskOpacity').disabled = !on;
+  $('mapViewScale').disabled = !on;
+  document.querySelectorAll('input[name=mapOverlayMode]').forEach(el => el.disabled = !on);
+  $('mapPreview').disabled = !on;
+  if(on){
+    setMapStatus('点击「预览地图 overlay」即可看到效果', 'info');
+  } else {
+    window.mapOverlayState = null;
+    mapOverlayNeedsRefresh = false;
+    setMapStatus('', 'clear');
+    render();
+  }
+});
+document.querySelectorAll('input[name=mapOverlayMode]').forEach(el => {
+  el.addEventListener('change', () => {
+    if(window.mapOverlayState){
+      window.mapOverlayState.overlayMode = document.querySelector('input[name=mapOverlayMode]:checked').value;
+      render();
+    }
+  });
+});
+$('mapMaskOpacity').addEventListener('input', () => {
+  $('mapMaskOpacityV').textContent = $('mapMaskOpacity').value + '%';
+  if(window.mapOverlayState){
+    window.mapOverlayState.overlayMaskOpacity = (+$('mapMaskOpacity').value) / 100;
+    render();
+  }
+});
+
 render();
+window.fetchAmapBasemap = fetchAmapBasemap; // for manual browser testing
 </script>
 </body>
 </html>
