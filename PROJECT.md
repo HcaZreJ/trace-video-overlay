@@ -9,11 +9,15 @@
 | 功能 | 状态 |
 |---|---|
 | 多格式轨迹解析（GPX/KML/TCX/FIT/GeoJSON/CSV） | 已上线 |
-| 多轨迹文件首尾相连（列表重排 + 拼接） | 已上线 |
-| 透明卡片 PNG 导出（分辨率 720/1080/1440 与 MP4 共用，样式可调） | 已上线 |
-| 定位点（卡片预览实时叠加显示比例；预览区右键另存高清 PNG） | 已上线 |
-| MP4 动画导出（WebCodecs + vendored mp4-muxer，720/1080/1440） | 已上线 |
-| 地图底图 overlay（高德静图，自动像素级对齐 + 取景缩放） | 已上线 |
+| 多轨迹文件首尾相连（列表重排 + 拼接 + 删除撤销） | 已上线 |
+| 工作台 UI（sticky 预览 + 四任务分区 + 吸底导出条 + 空态引导/示例轨迹） | 已上线 |
+| 透明卡片 PNG 导出（分辨率 720/1080/1440 与 MP4 共用，样式可调，成功 toast） | 已上线 |
+| 定位点（预览实时叠加 + 按钮导出高清 PNG；尺寸语义=彩色核直径，dotGeometry 统一几何） | 已上线 |
+| 动画预览扫拨条（拖动/播放定位点沿线运动，时长与 MP4 联动） | 已上线 |
+| MP4 动画导出（WebCodecs + vendored mp4-muxer，时长 clamp、导出中可取消、关页拦截） | 已上线 |
+| 地图底图（segmented 纯色/地图切换、参数变化自动重拉、key 类型中文诊断与申请引导） | 已上线 |
+| 底图缺失导出阻断（重试 / 一次性无底图导出） | 已上线 |
+| a11y 基线（label 关联、aria-live、键盘拖放区、focus-visible、主按钮对比度 ≥4.5:1） | 已上线 |
 
 ## 核心 Data Model
 - **轨迹点数组** `[{ lng, lat, ele?, time? }]`——所有解析器的统一输出、所有投影/渲染的统一输入。
@@ -27,8 +31,8 @@
 ## 模块地图
 | 模块 | 职责 |
 |---|---|
-| `core.mjs` | 纯函数权威实现：墨卡托投影、GCJ-02 转换、高德静图参数/对齐数学、轨迹平滑/拼接/指标、GeoJSON/文本坐标提取、进度插值 |
+| `core.mjs` | 纯函数权威实现：墨卡托投影、GCJ-02 转换、高德静图参数/对齐数学、轨迹平滑/拼接/指标、GeoJSON/文本坐标提取、进度插值、定位点几何（dotGeometry）、MP4 参数合法化（clampMp4Duration） |
 | `fit.mjs` | FIT 二进制解析 |
-| `index.html` | 全部 UI、文件载入、Canvas 渲染（renderCard/renderDot/renderFrame）、高德底图 fetch、MP4 导出管线；内联持有 core.mjs 逻辑的同步副本 |
+| `index.html` | 工作台 UI（sticky 预览舞台 + 四分区控件列 + 吸底导出条）、文件载入与撤销、Canvas 渲染（renderCard/renderDot/renderFrame）、动画预览播放、高德底图 fetch 与错误诊断、MP4 导出管线（含取消）；内联持有 core.mjs 逻辑的同步副本 |
 | `mp4-muxer.js` | vendored MP4 封装库 |
 | `tests/` | harness 盲测（visible/hidden 分离） |

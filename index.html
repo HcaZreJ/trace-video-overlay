@@ -5,25 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>轨迹贴图 · 剪辑素材导出</title>
 <style>
-  :root{--bg:#0d0f12;--panel:#171a1f;--line:#262b33;--fg:#e6e9ef;--dim:#8a93a2;--accent:#0a84ff;}
+  :root{--bg:#0d0f12;--panel:#171a1f;--line:#262b33;--fg:#e6e9ef;--dim:#8a93a2;--accent:#0a84ff;--accent-strong:#0066cc;--card-max:420px;color-scheme:dark}
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;
     background:var(--bg);color:var(--fg);line-height:1.5}
-  header{padding:20px 24px;border-bottom:1px solid var(--line)}
+  header{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
   header h1{margin:0;font-size:18px;font-weight:600}
   header p{margin:4px 0 0;font-size:13px;color:var(--dim)}
-  .wrap{max-width:1000px;margin:0 auto;padding:24px}
-  .drop{border:2px dashed var(--line);border-radius:14px;padding:32px;text-align:center;
+  #loadSample{flex-shrink:0;padding:8px 14px;border:1px solid var(--line);border-radius:8px;
+    background:#2a2f37;color:var(--fg);font-size:13px;cursor:pointer;transition:.15s}
+  #loadSample:hover{background:var(--accent-strong);color:#fff}
+  button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible,[tabindex]:focus-visible,summary:focus-visible{
+    outline:2px solid var(--accent);outline-offset:2px}
+  .workspace{display:grid;grid-template-columns:1fr 400px;gap:32px;max-width:1520px;margin:0 auto;padding:24px 40px;align-items:start}
+  @media(max-width:760px){.workspace{grid-template-columns:1fr}}
+  .drop{border:2px dashed var(--line);border-radius:14px;padding:16px;text-align:center;
     cursor:pointer;transition:.15s;background:var(--panel)}
   .drop:hover,.drop.over{border-color:var(--accent);background:#12161c}
   .drop strong{color:var(--accent)}
   .drop small{display:block;color:var(--dim);margin-top:6px;font-size:12px}
-  .info{margin:14px 0;font-size:13px;color:var(--dim)}
+  .info{margin:14px 0;font-size:13px;color:var(--dim);text-align:center;align-self:stretch}
   .info b{color:var(--fg)}
-  .main{display:grid;grid-template-columns:1fr 300px;gap:24px;margin-top:8px}
-  @media(max-width:760px){.main{grid-template-columns:1fr}}
-  .stage{display:flex;flex-direction:column;gap:20px;align-items:center}
-  .cardbox{display:inline-block;border-radius:12px;overflow:hidden;
+  .stage{display:flex;flex-direction:column;gap:20px;align-items:center;position:sticky;top:50vh;transform:translateY(-50%)}
+  @media(max-height:820px){:root{--card-max:320px}}
+  @media(max-width:760px){.stage{position:sticky;top:0;transform:none;z-index:10;background:var(--bg);padding:12px 0}}
+  .cardbox{width:min(100%,var(--card-max));aspect-ratio:1;margin:0 auto;border-radius:12px;overflow:hidden;
     background-image:
       linear-gradient(45deg,#2a2f37 25%,transparent 25%),
       linear-gradient(-45deg,#2a2f37 25%,transparent 25%),
@@ -31,7 +37,15 @@
       linear-gradient(-45deg,transparent 75%,#2a2f37 75%);
     background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0;
     background-color:#20242b}
-  canvas#card{display:block;width:360px;height:360px}
+  @media(max-width:760px){.cardbox{width:min(32vh,100%)}}
+  .cardbox.over{box-shadow:0 0 0 3px var(--accent) inset}
+  canvas#card{display:block;width:100%;height:100%}
+  .scrub{width:min(100%,var(--card-max))}
+  .scrub label{display:block;font-size:12px;color:var(--dim);margin-bottom:5px}
+  button.scrub-play{width:36px;height:36px;flex-shrink:0;border:none;border-radius:8px;
+    background:var(--line);color:var(--fg);cursor:pointer;font-size:14px;transition:.15s}
+  button.scrub-play:hover{background:var(--accent-strong);color:#fff}
+  @media(max-width:760px){button.scrub-play{width:40px;height:40px}}
   .dotwrap{display:flex;align-items:center;gap:12px;color:var(--dim);font-size:12px}
   .dotbox{width:72px;height:72px;border-radius:8px;
     background-image:
@@ -43,27 +57,65 @@
     min-width:48px;min-height:48px;
     display:flex;align-items:center;justify-content:center}
   canvas#dot{display:block;width:56px;height:56px}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
-  .panel h2{margin:0 0 12px;font-size:13px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .controls{display:flex;flex-direction:column;gap:20px}
+  .section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .section h2{margin:0 0 12px;font-size:13px;color:var(--dim);font-weight:600;letter-spacing:.04em}
+  .subhead{margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--line);
+    font-size:12px;color:var(--dim);font-weight:600}
   .field{margin-bottom:14px}
   .field label{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:5px}
   .field label span{color:var(--fg)}
   .field small{display:block;color:var(--dim);margin-top:4px;font-size:11px}
   .field small a{color:var(--accent)}
+  .gate-hint{display:block;color:var(--dim);font-size:12px;margin:8px 0 14px}
+  .needs-track{opacity:.45}
+  .export-actions.needs-track{opacity:1}
+  .export-actions.needs-track .export-actions-buttons,
+  .export-actions.needs-track #exportStatus,
+  .export-actions.needs-track #mp4ProgressWrap{opacity:.45}
   input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
     background:#0d0f12;color:var(--fg);font-size:13px}
   input[type=text]:disabled{opacity:.4;cursor:not-allowed}
   input[type=range]{width:100%}
   input[type=color]{width:100%;height:32px;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer;padding:2px}
+  .fieldrow{display:flex;align-items:center;gap:10px}
+  .fieldrow input[type=range]{flex:1;width:auto}
+  input.val{width:64px;padding:8px 6px;border:1px solid var(--line);border-radius:6px;
+    background:#0d0f12;color:var(--fg);font-size:13px;text-align:right}
+  input.val:disabled{opacity:.4;cursor:not-allowed}
   .row{display:flex;gap:10px}
   .row .field{flex:1}
   .check{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px}
+  .segmented{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:14px}
+  .seg-opt{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:9px 0;
+    font-size:13px;color:var(--dim);cursor:pointer;background:#0d0f12;transition:.15s;user-select:none}
+  .seg-opt:not(:last-child){border-right:1px solid var(--line)}
+  .seg-opt input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+  .seg-opt.active{background:var(--accent-strong);color:#fff}
+  .seg-opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+  @media(max-width:760px){.check{padding:10px 0}.seg-opt{padding:12px 0}}
+  .keyhelp{margin-top:8px;font-size:12px;color:var(--dim)}
+  .keyhelp summary{cursor:pointer;color:var(--accent)}
+  .keyhelp ol{margin:8px 0 4px;padding-left:18px}
+  .keyhelp li{margin-bottom:4px}
+  .keyhelp small{display:block;margin-top:6px}
+  .privacy-note{display:block;color:var(--dim);font-size:11px;margin:10px 0 0}
   .btns{display:flex;flex-direction:column;gap:10px;margin-top:8px}
   button.exp{padding:11px;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;
-    background:var(--accent);color:#fff;transition:.15s}
+    background:var(--accent-strong);color:#fff;transition:.15s}
   button.exp:hover{filter:brightness(1.1)}
   button.exp.sec{background:#2a2f37;color:var(--fg)}
   button.exp:disabled{opacity:.4;cursor:not-allowed}
+  .export-actions{position:sticky;bottom:12px;display:flex;flex-direction:column;gap:8px;padding:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 -8px 20px -10px rgba(0,0,0,.6);z-index:5}
+  .export-actions #exportStatus{margin:0;padding:0;border-top:none}
+  .export-actions-buttons{display:flex;gap:10px}
+  .export-actions-buttons button{flex:1;margin:0;white-space:nowrap;padding-left:8px;padding-right:8px}
+  @media(max-width:760px){.export-actions-buttons{flex-wrap:wrap}.export-actions-buttons button{flex:1 1 45%}}
+  #exportStatus .status-btn{display:inline-block;width:auto;margin:8px 8px 0 0;padding:5px 10px;
+    font-size:12px;border:1px solid var(--line);border-radius:6px;background:#2a2f37;color:var(--fg);cursor:pointer}
+  #exportStatus .status-btn:hover{background:var(--accent-strong);color:#fff}
   .hint{font-size:12px;color:var(--dim);margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
   .hint b{color:var(--fg)}
   .file-list{margin:0 0 14px}
@@ -73,147 +125,207 @@
   .file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .file-meta{color:var(--dim);flex-shrink:0;font-size:12px}
   .file-btns{display:flex;gap:4px;flex-shrink:0}
-  .file-btns button{width:24px;height:24px;border:none;border-radius:6px;background:var(--line);
+  .file-btns button{width:32px;height:32px;border:none;border-radius:6px;background:var(--line);
     color:var(--fg);cursor:pointer;font-size:13px;line-height:1;transition:.15s}
-  .file-btns button:not(:disabled):hover{background:var(--accent);color:#fff}
+  .file-btns button:not(:disabled):hover{background:var(--accent-strong);color:#fff}
   .file-btns button:disabled{opacity:.35;cursor:not-allowed}
+  @media(max-width:760px){.file-btns button{width:40px;height:40px}}
   input[type=file]{display:none}
 </style>
 </head>
 <body>
 <header>
-  <h1>轨迹贴图 · 剪辑素材导出</h1>
-  <p>把 GPX / KML / TCX / FIT / GeoJSON 骑行轨迹导出成透明 PNG，放进剪映当角落贴图</p>
-</header>
-<div class="wrap">
-  <div class="drop" id="drop">
-    <div>拖入轨迹文件（可多选，按顺序首尾相连），或 <strong>点击选择</strong></div>
-    <small>支持 .gpx / .kml / .tcx / .fit / .geojson / .csv — 全程本地处理，不上传</small>
+  <div>
+    <h1>轨迹贴图 · 剪辑素材导出</h1>
+    <p>把 GPX / KML / TCX / FIT / GeoJSON / CSV 骑行轨迹导出成透明 PNG 或 MP4 动画，可叠加地图底图，放进剪映当角落贴图</p>
   </div>
-  <input type="file" id="file" accept=".gpx,.kml,.tcx,.xml,.fit,.geojson,.json,.csv,.txt" multiple>
-  <div class="info" id="info">尚未载入轨迹</div>
-  <div class="file-list" id="fileList"></div>
+  <button type="button" id="loadSample" hidden>试试示例轨迹</button>
+</header>
+<div class="workspace">
+  <div class="stage">
+    <div class="cardbox"><canvas id="card" width="600" height="600" role="img" aria-label="轨迹卡片预览"></canvas></div>
+    <div class="scrub" id="previewScrub" style="display:none">
+      <label for="previewProgress" id="previewScrubLabel">动画预览</label>
+      <div class="fieldrow">
+        <button type="button" class="scrub-play" id="previewPlay" aria-label="播放/暂停动画预览" aria-pressed="false">▶</button>
+        <input type="range" id="previewProgress" min="0" max="1000" value="500">
+      </div>
+    </div>
+    <div class="info" id="info" aria-live="polite">尚未载入轨迹</div>
+    <div class="dotwrap">
+      <div class="dotbox"><canvas id="dot" width="128" height="128" role="img" aria-label="定位点预览"></canvas></div>
+      <div>单独的定位点（用底部「导出定位点 PNG」按钮导出，也可右键此图另存）<br>放进剪映后用位置关键帧让它沿线路移动</div>
+    </div>
+  </div>
 
-  <div class="main">
-    <div class="stage">
-      <div class="cardbox"><canvas id="card" width="600" height="600"></canvas></div>
-      <div class="dotwrap">
-        <div class="dotbox"><canvas id="dot" width="128" height="128"></canvas></div>
-        <div>单独的定位点（右键 → 图片另存为 保存 PNG）<br>放进剪映后用位置关键帧让它沿线路移动</div>
+  <div class="controls">
+    <div class="section">
+      <h2>轨迹</h2>
+      <div class="drop" id="drop" role="button" tabindex="0" aria-label="选择或拖入轨迹文件">
+        <div>拖入轨迹文件（可多选，按顺序首尾相连），或 <strong>点击选择</strong></div>
+        <small>支持 .gpx / .kml / .tcx / .fit / .geojson / .csv — 全程本地处理，不上传</small>
+      </div>
+      <small class="gate-hint" id="trackGateHint">载入轨迹后，下方样式与导出才会生效</small>
+      <input type="file" id="file" accept=".gpx,.kml,.tcx,.xml,.fit,.geojson,.json,.csv,.txt" multiple>
+      <div class="file-list" id="fileList"></div>
+      <div class="hint" id="trackErrors" aria-live="polite" style="display:none"></div>
+      <div class="hint" id="trackUndo" aria-live="polite" style="display:none"></div>
+    </div>
+
+    <div class="section needs-track" data-gate>
+      <h2>背景与卡片</h2>
+      <div class="segmented" id="bgModeSegmented" role="radiogroup" aria-label="卡片背景">
+        <label class="seg-opt" id="bgModeSolidLabel"><input type="radio" name="bgMode" id="bgModeSolid" value="solid" checked> 纯色</label>
+        <label class="seg-opt" id="bgModeMapLabel"><input type="radio" name="bgMode" id="bgModeMap" value="map"> 地图底图（需免费 key）</label>
+      </div>
+      <input type="checkbox" id="mapOverlay" hidden>
+
+      <div id="bgSolidFields">
+        <div class="field">
+          <label for="bgColor">底色</label>
+          <input type="color" id="bgColor" value="#000000">
+        </div>
+        <div class="field">
+          <label for="bgOpacity">底色不透明度（%）</label>
+          <div class="fieldrow">
+            <input type="range" id="bgOpacity" min="0" max="100" value="35">
+            <input type="number" id="bgOpacityV" class="val" min="0" max="100" step="1" value="35" aria-label="底色透明度数值输入">
+          </div>
+        </div>
+      </div>
+
+      <div id="bgMapFields" style="display:none">
+        <div class="field">
+          <label for="amapKey">高德 Web 服务 API Key</label>
+          <input type="text" id="amapKey" placeholder="高德 Web 服务 API Key" disabled>
+          <small><a href="https://console.amap.com/dev/key/app" target="_blank" rel="noopener">→ 前往高德开放平台申请 key</a></small>
+          <details class="keyhelp">
+            <summary>怎么申请（免费）</summary>
+            <ol>
+              <li>注册高德开放平台账号，完成个人实名认证</li>
+              <li>进入控制台「应用管理 → 我的应用」，创建一个应用</li>
+              <li>在应用下「添加 Key」，服务平台<b>必须选择「Web服务」</b>（选成「Web端(JS API)」会报错）</li>
+              <li>复制生成的 key，粘贴到上面的输入框</li>
+            </ol>
+          </details>
+        </div>
+        <label class="check"><input type="checkbox" id="mapTraffic" disabled> 显示实时路况</label>
+        <div class="field">
+          <label>底图样式</label>
+          <div class="row">
+            <label class="check"><input type="radio" name="mapOverlayMode" value="none" checked disabled> 地图铺满</label>
+            <label class="check"><input type="radio" name="mapOverlayMode" value="mask" disabled> 地图 + 黑蒙层</label>
+          </div>
+        </div>
+        <div class="field" id="mapMaskOpacityField" style="display:none">
+          <label for="mapMaskOpacity">蒙层不透明度（%）</label>
+          <div class="fieldrow">
+            <input type="range" id="mapMaskOpacity" min="0" max="80" value="30" disabled>
+            <input type="number" id="mapMaskOpacityV" class="val" min="0" max="80" step="1" value="30" disabled aria-label="蒙层透明度数值输入">
+          </div>
+        </div>
+        <div class="field">
+          <label for="mapViewScale">取景缩放（×）</label>
+          <div class="fieldrow">
+            <input type="range" id="mapViewScale" min="0.5" max="1.5" value="1" step="0.05" disabled>
+            <input type="number" id="mapViewScaleV" class="val" min="0.5" max="1.5" step="0.05" value="1.00" disabled aria-label="取景缩放数值输入">
+          </div>
+          <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">
+            调整轨迹在卡片中的占比，底图与轨迹同步缩放、贴合关系保持；拉小可能露出底图边界（边界外为卡片背景）。
+          </small>
+        </div>
+        <div class="btns">
+          <button class="exp sec" id="mapPreview" disabled>重新拉取底图</button>
+        </div>
+        <small class="privacy-note">开启后轨迹范围坐标会发送给高德以获取底图，其余处理仍全部在本地；key 仅明文保存在你浏览器本地</small>
+        <div class="hint" id="mapOverlayStatus" aria-live="polite" style="display:none"></div>
+      </div>
+
+      <div class="field">
+        <label for="radius">圆角（px）</label>
+        <div class="fieldrow">
+          <input type="range" id="radius" min="0" max="300" value="64">
+          <input type="number" id="radiusV" class="val" min="0" max="300" step="1" value="64" aria-label="圆角数值输入">
+        </div>
+      </div>
+      <div class="field">
+        <label for="pad">内边距（px）</label>
+        <div class="fieldrow">
+          <input type="range" id="pad" min="20" max="150" value="70">
+          <input type="number" id="padV" class="val" min="20" max="150" step="1" value="70" aria-label="内边距数值输入">
+        </div>
       </div>
     </div>
 
-    <div class="panel">
-      <h2>样式</h2>
+    <div class="section needs-track" data-gate>
+      <h2>线路与标记</h2>
       <div class="field">
-        <label>线路颜色 <span id="lineColorV"></span></label>
+        <label for="lineColor">线路颜色</label>
         <input type="color" id="lineColor" value="#ffd60a">
       </div>
       <div class="field">
-        <label>线宽 <span id="lineWidthV">10</span></label>
-        <input type="range" id="lineWidth" min="2" max="30" value="10">
-      </div>
-      <div class="field">
-        <label>底色</label>
-        <input type="color" id="bgColor" value="#000000">
-      </div>
-      <div class="field">
-        <label>底色透明度 <span id="bgOpacityV">35%</span></label>
-        <input type="range" id="bgOpacity" min="0" max="100" value="35">
-      </div>
-      <div class="field">
-        <label>圆角 <span id="radiusV">64</span></label>
-        <input type="range" id="radius" min="0" max="300" value="64">
-      </div>
-      <div class="field">
-        <label>内边距 <span id="padV">70</span></label>
-        <input type="range" id="pad" min="20" max="150" value="70">
+        <label for="lineWidth">线宽（px）</label>
+        <div class="fieldrow">
+          <input type="range" id="lineWidth" min="2" max="30" value="10">
+          <input type="number" id="lineWidthV" class="val" min="2" max="30" step="1" value="10" aria-label="线宽数值输入">
+        </div>
       </div>
 
-      <h2 style="margin-top:20px">标记</h2>
+      <div class="subhead">标记</div>
       <label class="check"><input type="checkbox" id="showMarkers" checked> 显示起点 / 终点</label>
       <div class="row">
         <div class="field">
-          <label>起点</label>
+          <label for="startColor">起点</label>
           <input type="color" id="startColor" value="#34c759">
         </div>
         <div class="field">
-          <label>终点</label>
+          <label for="endColor">终点</label>
           <input type="color" id="endColor" value="#ff453a">
         </div>
       </div>
       <div class="field">
-        <label>大小 <span id="markerSizeV">20</span></label>
-        <input type="range" id="markerSize" min="8" max="60" value="20">
-      </div>
-
-      <h2 style="margin-top:20px">定位点</h2>
-      <div class="row">
-        <div class="field">
-          <label>颜色</label>
-          <input type="color" id="dotColor" value="#0a84ff">
-        </div>
-        <div class="field">
-          <label>大小 <span id="dotSizeV">75</span></label>
-          <input type="range" id="dotSize" min="8" max="200" value="75">
+        <label for="markerSize">大小（px）</label>
+        <div class="fieldrow">
+          <input type="range" id="markerSize" min="8" max="60" value="20">
+          <input type="number" id="markerSizeV" class="val" min="8" max="60" step="1" value="20" aria-label="标记大小数值输入">
         </div>
       </div>
 
-      <h2 style="margin-top:20px">地图 overlay</h2>
-      <label class="check"><input type="checkbox" id="mapOverlay"> 开启地图底图 overlay</label>
+      <div class="subhead">定位点</div>
       <div class="field">
-        <label>高德 Web 服务 API Key</label>
-        <input type="text" id="amapKey" placeholder="高德 Web 服务 API Key" disabled>
-        <small><a href="https://console.amap.com/dev/key/app" target="_blank" rel="noopener">→ 前往高德开放平台申请 key</a></small>
+        <label for="dotColor">颜色</label>
+        <input type="color" id="dotColor" value="#0a84ff">
       </div>
-      <label class="check"><input type="checkbox" id="mapTraffic" disabled> 显示实时路况</label>
       <div class="field">
-        <label>底图样式</label>
-        <div class="row">
-          <label class="check"><input type="radio" name="mapOverlayMode" value="none" checked disabled> 地图铺满</label>
-          <label class="check"><input type="radio" name="mapOverlayMode" value="mask" disabled> 地图 + 黑蒙层</label>
+        <label for="dotSize">大小（px）</label>
+        <div class="fieldrow">
+          <input type="range" id="dotSize" min="8" max="160" value="58">
+          <input type="number" id="dotSizeV" class="val" min="8" max="160" step="1" value="58" aria-label="定位点大小数值输入">
         </div>
+        <small>定位点只出现在预览与 MP4 里；卡片 PNG 不含定位点，用「导出定位点 PNG」单独出图</small>
       </div>
-      <div class="field">
-        <label>蒙层透明度 <span id="mapMaskOpacityV">30%</span></label>
-        <input type="range" id="mapMaskOpacity" min="0" max="80" value="30" disabled>
-      </div>
-      <div class="field">
-        <label>取景缩放 <span id="mapViewScaleV">1.00×</span></label>
-        <input type="range" id="mapViewScale" min="0.5" max="1.5" value="1" step="0.05" disabled>
-        <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">
-          调整轨迹在卡片中的占比，底图与轨迹同步缩放、贴合关系保持；拉小可能露出底图边界（边界外为卡片背景）。
-        </small>
-      </div>
-      <div class="btns">
-        <button class="exp sec" id="mapPreview" disabled>预览地图 overlay</button>
-      </div>
-      <div class="hint" id="mapOverlayStatus" style="display:none"></div>
+    </div>
 
+    <div class="section needs-track" data-gate>
+      <h2>导出</h2>
       <div class="field">
-        <label>导出分辨率（PNG 与 MP4 共用）</label>
+        <label for="exportRes">导出分辨率（PNG 与 MP4 共用）</label>
         <select id="exportRes">
-          <option value="720">720</option>
-          <option value="1080" selected>1080</option>
-          <option value="1440">1440</option>
+          <option value="720">720 × 720</option>
+          <option value="1080" selected>1080 × 1080</option>
+          <option value="1440">1440 × 1440</option>
         </select>
       </div>
 
-      <div class="btns">
-        <button class="exp" id="expCard" disabled>导出地图卡片 PNG</button>
-      </div>
-      <div class="hint">
-        <b>剪映用法：</b>地图卡片当画中画放角落；把定位点也拖进去，沿线路打几个位置关键帧即可让它移动。不想动就只放地图卡片。
-      </div>
-
-      <h2 style="margin-top:20px">MP4 动画导出</h2>
+      <div class="subhead">MP4 动画</div>
+      <small class="gate-hint" id="mp4UnsupportedHint" style="display:none">当前浏览器不支持视频编码，导出 MP4 需要新版 Chrome / Edge / Safari</small>
       <div class="row">
         <div class="field">
-          <label>时长（秒）</label>
-          <input type="number" id="mp4Duration" min="1" max="60" step="0.5" value="6">
+          <label for="mp4Duration">时长（秒）</label>
+          <input type="number" id="mp4Duration" class="val" min="1" max="60" step="0.5" value="6">
         </div>
         <div class="field">
-          <label>帧率</label>
+          <label for="mp4Fps">帧率</label>
           <select id="mp4Fps">
             <option value="24">24</option>
             <option value="30" selected>30</option>
@@ -223,7 +335,7 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>背景模式</label>
+          <label for="mp4BgMode">MP4 画布</label>
           <select id="mp4BgMode">
             <option value="card" selected>卡片</option>
             <option value="green">绿幕</option>
@@ -232,22 +344,31 @@
       </div>
       <div class="row">
         <div class="field" id="mp4PageColorField">
-          <label>卡片背景色</label>
+          <label for="mp4PageColor">画布颜色（卡片圆角外）</label>
           <input type="color" id="mp4PageColor" value="#0d0f12">
+          <small>卡片本体仍用上方『底色』；画布是卡片四角外的部分</small>
         </div>
         <div class="field" id="mp4GreenColorField" style="display:none">
-          <label>绿幕色</label>
+          <label for="mp4GreenColor">绿幕色</label>
           <input type="color" id="mp4GreenColor" value="#00b140">
         </div>
       </div>
+      <div class="hint">
+        <b>剪映用法：</b>地图卡片当画中画放角落；把定位点也拖进去，沿线路打几个位置关键帧即可让它移动。不想动就只放地图卡片。
+      </div>
+    </div>
+
+    <div class="export-actions needs-track" data-gate>
       <div class="field" id="mp4ProgressWrap" style="display:none">
-        <label>导出进度 <span id="mp4ProgressV">0%</span></label>
+        <label for="mp4Progress">导出进度 <span id="mp4ProgressV">0%</span></label>
         <progress id="mp4Progress" value="0" max="100" style="width:100%"></progress>
       </div>
-      <div class="btns">
-        <button class="exp" id="expMp4" disabled>导出 MP4 动画</button>
+      <div class="hint" id="exportStatus" aria-live="polite" style="display:none"></div>
+      <div class="export-actions-buttons">
+        <button class="exp" id="expCard" disabled>导出卡片 PNG</button>
+        <button class="exp sec" id="expDot" disabled>导出定位点 PNG</button>
+        <button class="exp sec" id="expMp4" disabled>导出 MP4</button>
       </div>
-      <div class="hint" id="mp4Status" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -264,6 +385,7 @@ let trackPoints=null;   // = concatTrackPoints(trackFiles) 的派生结果
 // 挂在 window 上（而非纯 let 局部变量）便于浏览器控制台手测
 window.mapOverlayState = null;
 let mapOverlayNeedsRefresh = false;  // 参数变化但还没预览时为 true
+let previewProgress = 0.5;  // 动画预览扫拨条进度 0..1，初始居中
 
 /* ==================== 轨迹解析 ==================== */
 function parseFIT(buf){
@@ -613,12 +735,42 @@ function projectTrackOnAmap(pointsWgs84, size, center, amapZoom, k) {
   return { points, fullSize: size };
 }
 
-/* ==================== 高德静图 fetch 层（浏览器运行时：Image + 内存缓存 + 超时） ==================== */
+/* ==================== 高德静图 fetch 层（浏览器运行时：fetch + JSON 诊断 + Image 兜底 + 内存缓存 + 超时） ==================== */
 // 恒 size=1024、scale=2；静图内容视野恒等于 1024 世界像素 → contentSize=1024。
 const amapBasemapCache = new Map();
-async function fetchAmapBasemap({ pointsWgs84, key, traffic }){
-  const { url, center, zoom, spanPx } = computeAmapUrlForTrack(pointsWgs84, 1024, key, 2, traffic);
-  if(amapBasemapCache.has(url)) return { image: amapBasemapCache.get(url), center, zoom, spanPx, contentSize: 1024, url };
+function diagnoseAmapApiError(info, infocode){
+  let message;
+  if(info === 'INVALID_USER_SCODE' || info === 'USERKEY_PLAT_NOMATCH'){
+    message = 'key 类型不对：需要『Web服务』类型的 key，你申请的可能是『Web端(JS API)』类型。请在高德控制台新建一个『Web服务』key';
+  } else if(info === 'DAILY_QUERY_OVER_LIMIT' || info === 'CUQPS_HAS_EXCEEDED_THE_LIMIT'){
+    message = 'key 当日配额/并发已超限，稍后再试或更换 key';
+  } else if(info === 'INVALID_USER_KEY'){
+    message = 'key 无效：请检查是否复制完整';
+  } else {
+    message = `高德接口返回错误：${info}（${infocode}）`;
+  }
+  const err = new Error(message);
+  err.code = 'amap_api_error';
+  return err;
+}
+function loadImageFromBlob(blob){
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      const err = new Error('fetchAmapBasemap: failed to decode basemap image');
+      err.code = 'fetch_failed';
+      reject(err);
+    };
+    img.src = objectUrl;
+  });
+}
+function loadImageDirect(url){
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -635,8 +787,7 @@ async function fetchAmapBasemap({ pointsWgs84, key, traffic }){
       if(settled) return;
       settled = true;
       clearTimeout(timer);
-      amapBasemapCache.set(url, img);
-      resolve({ image: img, center, zoom, spanPx, contentSize: 1024, url });
+      resolve(img);
     };
     img.onerror = () => {
       if(settled) return;
@@ -648,6 +799,54 @@ async function fetchAmapBasemap({ pointsWgs84, key, traffic }){
     };
     img.src = url;
   });
+}
+async function fetchBasemapViaHttp(url){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  let resp;
+  try {
+    resp = await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+  const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+  let looksJson = contentType.includes('json');
+  let peeked = null;
+  if(!looksJson){
+    try {
+      peeked = await resp.clone().text();
+      if(peeked.trim().startsWith('{')) looksJson = true;
+    } catch(_){ /* 二进制内容可能无法安全解码为文本，忽略即可 */ }
+  }
+  if(looksJson){
+    let data = null;
+    try { data = JSON.parse(peeked != null ? peeked : await resp.text()); } catch(_){ /* 非合法 JSON，走通用失败分支 */ }
+    if(data && data.info && data.info !== 'OK') throw diagnoseAmapApiError(data.info, data.infocode);
+    const err = new Error('fetchAmapBasemap: unexpected JSON response');
+    err.code = 'fetch_failed';
+    throw err;
+  }
+  const blob = await resp.blob();
+  return loadImageFromBlob(blob);
+}
+async function fetchAmapBasemap({ pointsWgs84, key, traffic }){
+  const { url, center, zoom, spanPx } = computeAmapUrlForTrack(pointsWgs84, 1024, key, 2, traffic);
+  if(amapBasemapCache.has(url)) return { image: amapBasemapCache.get(url), center, zoom, spanPx, contentSize: 1024, url };
+  let image;
+  try {
+    image = await fetchBasemapViaHttp(url);
+  } catch(err) {
+    if(err && err.code === 'amap_api_error') throw err;
+    try {
+      image = await loadImageDirect(url);
+    } catch(_fallbackErr){
+      const finalErr = new Error('底图加载失败：网络问题或跨域受限');
+      finalErr.code = 'fetch_failed';
+      throw finalErr;
+    }
+  }
+  amapBasemapCache.set(url, image);
+  return { image, center, zoom, spanPx, contentSize: 1024, url };
 }
 
 /* ==================== Catmull-Rom 平滑插值（core.mjs 权威，已 node:test 覆盖） ==================== */
@@ -750,6 +949,28 @@ function reorderTrackFiles(files,act,i){
   return [...files];
 }
 
+/* ==================== 定位点几何 / MP4 参数（core.mjs 权威，已 node:test 覆盖） ==================== */
+// dotGeometry：以「彩色核直径」为唯一尺寸语义，导出定位点绘制所需的全部几何量。
+function dotGeometry(size) {
+  if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
+    throw new RangeError('dotGeometry: size must be a positive finite number');
+  }
+  const coreR = size / 2;
+  const ringW = size * 0.15;
+  const outerR = coreR + ringW;
+  const shadowBlur = size * 0.104;
+  const shadowOffsetY = size * 0.026;
+  const pad = Math.ceil(size * 0.26);
+  const full = size + 2 * pad;
+  return { coreR, ringW, outerR, pad, full, shadowBlur, shadowOffsetY };
+}
+
+// clampMp4Duration：MP4 导出时长的合法化（[1,60] 秒，非法输入回默认 6）。
+function clampMp4Duration(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 6;
+  return Math.min(60, Math.max(1, value));
+}
+
 /* ==================== 渲染 ==================== */
 function hexToRgba(hex,alpha){
   const n=parseInt(hex.slice(1),16);
@@ -771,7 +992,21 @@ function renderCard(canvas,size,opts={}){
   const ctx=canvas.getContext('2d');
   canvas.width=canvas.height=size;
   ctx.clearRect(0,0,size,size);
-  if(!trackPoints) return;
+  if(!trackPoints){
+    const emptyScale=size/CARD_SIZE;
+    ctx.save();
+    ctx.fillStyle='#8a93a2';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.font=`${Math.round(20*emptyScale)}px -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif`;
+    ctx.fillText('拖入轨迹文件开始',size/2,size/2-14*emptyScale);
+    if($('loadSample')&&!$('loadSample').hidden){
+      ctx.font=`${Math.round(15*emptyScale)}px -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif`;
+      ctx.fillText('或点上方「试试示例轨迹」',size/2,size/2+14*emptyScale);
+    }
+    ctx.restore();
+    return;
+  }
   const scale=size/CARD_SIZE;
   const radius=+$('radius').value*scale;
   const pad=+$('pad').value*scale;
@@ -797,14 +1032,15 @@ function renderCard(canvas,size,opts={}){
       drawMarker(ctx,proj.points.at(-1),$('endColor').value,mr);
     }
     if(opts.previewDot){
-      const p = pointAtProgress(proj.points, 0.5);
+      const p = pointAtProgress(proj.points, opts.previewProgress ?? 0.5);
       if(p){
-        const d = +$('dotSize').value * scale, r = d*0.385, ring = d*0.115;
+        const d = +$('dotSize').value * scale;
+        const g = dotGeometry(d);
         ctx.save();
-        ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=d*0.08; ctx.shadowOffsetY=d*0.02;
-        ctx.beginPath(); ctx.arc(p.x, p.y, r+ring, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+        ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
+        ctx.beginPath(); ctx.arc(p.x, p.y, g.outerR, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
         ctx.restore();
-        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, g.coreR, 0, Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
       }
     }
     ctx.restore();
@@ -825,14 +1061,15 @@ function renderCard(canvas,size,opts={}){
     drawMarker(ctx,proj.points.at(-1),$('endColor').value,mr);
   }
   if(opts.previewDot){
-    const p = pointAtProgress(proj.points, 0.5);
+    const p = pointAtProgress(proj.points, opts.previewProgress ?? 0.5);
     if(p){
-      const d = +$('dotSize').value * scale, r = d*0.385, ring = d*0.115;
+      const d = +$('dotSize').value * scale;
+      const g = dotGeometry(d);
       ctx.save();
-      ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=d*0.08; ctx.shadowOffsetY=d*0.02;
-      ctx.beginPath(); ctx.arc(p.x, p.y, r+ring, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+      ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
+      ctx.beginPath(); ctx.arc(p.x, p.y, g.outerR, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
       ctx.restore();
-      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, g.coreR, 0, Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
     }
   }
   ctx.restore();
@@ -840,16 +1077,15 @@ function renderCard(canvas,size,opts={}){
 }
 function renderDot(canvas,size){
   const ctx=canvas.getContext('2d');
-  const pad=Math.ceil(size*0.08);
-  const full=size+2*pad;
-  canvas.width=canvas.height=full;
-  ctx.clearRect(0,0,full,full);
-  const c=full/2, r=size*0.385, ring=size*0.115;
+  const g = dotGeometry(size);
+  canvas.width=canvas.height=g.full;
+  ctx.clearRect(0,0,g.full,g.full);
+  const c=g.full/2;
   ctx.save();
-  ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=size*0.08; ctx.shadowOffsetY=size*0.02;
-  ctx.beginPath(); ctx.arc(c,c,r+ring,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+  ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
+  ctx.beginPath(); ctx.arc(c,c,g.outerR,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
   ctx.restore();
-  ctx.beginPath(); ctx.arc(c,c,r,0,Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
+  ctx.beginPath(); ctx.arc(c,c,g.coreR,0,Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
 }
 // 逐帧渲染（MP4 导出用）：整帧不透明背景 + 全线常显 + 定位点走到 progress 处。
 // 复用 projectTrack/strokePath/drawMarker/pointAtProgress；参数全部来自 opts（便于逐帧/离屏，不读 DOM）。
@@ -896,18 +1132,19 @@ function renderFrame(ctx,size,progress,opts){
   // 定位点：仿 renderDot（白环 + 彩色心 + 阴影），直径随 dotSize*scale
   const p=pointAtProgress(proj.points,progress);
   if(p){
-    const d=opts.dotSize*scale, r=d*0.385, ring=d*0.115;
+    const d=opts.dotSize*scale;
+    const g=dotGeometry(d);
     ctx.save();
-    ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=d*0.08; ctx.shadowOffsetY=d*0.02;
-    ctx.beginPath(); ctx.arc(p.x,p.y,r+ring,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+    ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
+    ctx.beginPath(); ctx.arc(p.x,p.y,g.outerR,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
     ctx.restore();
-    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fillStyle=opts.dotColor; ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x,p.y,g.coreR,0,Math.PI*2); ctx.fillStyle=opts.dotColor; ctx.fill();
   }
   ctx.restore();
 }
 function render(){
   try {
-    renderCard($('card'),CARD_SIZE,{previewDot:true});
+    renderCard($('card'),CARD_SIZE,{previewDot:true, previewProgress});
   } catch(err) {
     console.error(err);
     setMapStatus(`渲染失败：${err.message}`,'error');
@@ -915,9 +1152,55 @@ function render(){
   const dotExportPx = Math.round(+$('dotSize').value * (+$('exportRes').value||1080) / CARD_SIZE);
   renderDot($('dot'), dotExportPx);
   const dispScale = ($('card').clientWidth||360) / CARD_SIZE;
-  const dispPx = Math.max(1, Math.round(+$('dotSize').value * dispScale * 1.16)); // ×1.16 与 canvas 留边一致
+  const dotFullRatio = dotGeometry(dotExportPx).full / dotExportPx; // full/彩色核直径 之比，保证显示比例与卡片预览一致
+  const dispPx = Math.max(1, Math.round(+$('dotSize').value * dispScale * dotFullRatio));
   $('dot').style.width = $('dot').style.height = dispPx + 'px';
 }
+
+/* ==================== 动画预览播放（扫拨条所见即所得） ==================== */
+let previewPlaying = false;
+let previewPlayRafId = null;
+let previewPlayLastTs = null;
+function previewPlayStep(ts){
+  if(!previewPlaying) return;
+  if(previewPlayLastTs !== null){
+    const dt = ts - previewPlayLastTs;
+    const durationMs = clampMp4Duration(+$('mp4Duration').value) * 1000;
+    let p = previewProgress + dt / durationMs;
+    p = p % 1;
+    previewProgress = p;
+    $('previewProgress').value = Math.round(previewProgress * 1000);
+    render();
+  }
+  previewPlayLastTs = ts;
+  previewPlayRafId = requestAnimationFrame(previewPlayStep);
+}
+function startPreviewPlay(){
+  if(previewPlaying) return;
+  previewPlaying = true;
+  previewPlayLastTs = null;
+  $('previewPlay').textContent = '⏸';
+  $('previewPlay').setAttribute('aria-pressed','true');
+  previewPlayRafId = requestAnimationFrame(previewPlayStep);
+}
+function stopPreviewPlay(){
+  previewPlaying = false;
+  if(previewPlayRafId !== null){ cancelAnimationFrame(previewPlayRafId); previewPlayRafId = null; }
+  previewPlayLastTs = null;
+  $('previewPlay').textContent = '▶';
+  $('previewPlay').setAttribute('aria-pressed','false');
+}
+function updatePreviewScrubLabel(){
+  $('previewScrubLabel').textContent = `动画预览 · ${clampMp4Duration(+$('mp4Duration').value)} 秒`;
+}
+$('previewPlay').addEventListener('click', () => {
+  if(previewPlaying) stopPreviewPlay(); else startPreviewPlay();
+});
+$('previewProgress').addEventListener('input', () => {
+  if(previewPlaying) stopPreviewPlay();
+  previewProgress = (+$('previewProgress').value) / 1000;
+  render();
+});
 
 /* ==================== 地图 overlay UI ==================== */
 function setMapStatus(msg, kind){
@@ -929,14 +1212,26 @@ function setMapStatus(msg, kind){
 }
 function markOverlayNeedsRefresh(){
   mapOverlayNeedsRefresh = true;
-  if($('mapOverlay').checked && window.mapOverlayState){
-    setMapStatus('参数已变，点「预览地图 overlay」重新拉取底图', 'warn');
-  }
+}
+let mapFetchInFlight = false;
+let mapFetchPending = false;
+let mapAutoFetchTimer = null;
+function scheduleMapAutoFetch(){
+  if(mapAutoFetchTimer) clearTimeout(mapAutoFetchTimer);
+  mapAutoFetchTimer = setTimeout(() => {
+    mapAutoFetchTimer = null;
+    const key = ($('amapKey').value || '').trim();
+    if($('mapOverlay').checked && key && trackPoints && trackPoints.length){
+      onPreviewMapOverlay();
+    }
+  }, 600);
 }
 async function onPreviewMapOverlay(){
   const key = ($('amapKey').value || '').trim();
   if(!key){ setMapStatus('请先填写高德 API Key', 'error'); return; }
   if(!trackPoints || trackPoints.length === 0){ setMapStatus('请先载入轨迹', 'error'); return; }
+  if(mapFetchInFlight){ mapFetchPending = true; return; }
+  mapFetchInFlight = true;
   const btn = $('mapPreview');
   btn.disabled = true; setMapStatus('正在拉取底图…', 'info');
   try {
@@ -956,40 +1251,111 @@ async function onPreviewMapOverlay(){
       overlayMaskOpacity: (+$('mapMaskOpacity').value) / 100,
     };
     mapOverlayNeedsRefresh = false;
-    setMapStatus(`✓ 底图已加载（zoom=${result.zoom}）`, 'ok');
+    setMapStatus(`✓ 底图已加载（缩放级别 ${result.zoom}）`, 'ok');
     render();
   } catch(err){
     window.mapOverlayState = null;
-    setMapStatus(`底图加载失败：${err.message}`, 'error');
+    const msg = (err && err.code === 'amap_api_error') ? err.message : `底图加载失败：${err && err.message ? err.message : err}`;
+    setMapStatus(msg, 'error');
     render();
   } finally {
     btn.disabled = false;
+    mapFetchInFlight = false;
+    if(mapFetchPending){
+      mapFetchPending = false;
+      onPreviewMapOverlay();
+    }
   }
+}
+function updateBgModeUI(){
+  const mapMode = $('bgModeMap').checked;
+  $('bgModeSolidLabel').classList.toggle('active', !mapMode);
+  $('bgModeMapLabel').classList.toggle('active', mapMode);
+  $('bgSolidFields').style.display = mapMode ? 'none' : '';
+  $('bgMapFields').style.display = mapMode ? '' : 'none';
+}
+function updateMapModeFieldsUI(){
+  const maskMode = document.querySelector('input[name=mapOverlayMode]:checked').value === 'mask';
+  $('mapMaskOpacityField').style.display = maskMode ? '' : 'none';
 }
 $('mapPreview').addEventListener('click', onPreviewMapOverlay);
 
 /* ==================== 导出 ==================== */
-function download(canvas,filename){
+function download(canvas,filename,onDone){
   canvas.toBlob(blob=>{
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob); a.download=filename;
     a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    if(onDone) onDone();
   },'image/png');
 }
+// 一次性覆盖：由「改用无底图导出」设置，被下一次 exportCard/exportMp4 消费后立即清零；
+// 不改变 mapOverlay/segmented 的勾选状态，只让本次导出临时按无底图路径渲染。
+let exportForceNoBasemap = false;
+let exportStatusClearTimer = null;
+function setExportStatus(msg, kind){
+  const el = $('exportStatus');
+  if(exportStatusClearTimer){ clearTimeout(exportStatusClearTimer); exportStatusClearTimer = null; }
+  if(!msg || kind === 'clear'){ el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = '';
+  const prefix = kind === 'success' ? '✓ ' : kind === 'error' ? '✕ ' : '';
+  el.textContent = prefix + msg;
+  el.style.color = kind === 'success' ? '#34c759' : kind === 'error' ? '#ff453a' : 'var(--dim)';
+  if(kind === 'success'){
+    exportStatusClearTimer = setTimeout(() => {
+      el.style.display = 'none'; el.textContent = ''; exportStatusClearTimer = null;
+    }, 6000);
+  }
+}
+function showExportBlockedStatus(retryFn){
+  if(exportStatusClearTimer){ clearTimeout(exportStatusClearTimer); exportStatusClearTimer = null; }
+  const el = $('exportStatus');
+  el.style.display = '';
+  el.style.color = '#ff453a';
+  el.innerHTML = '✕ 地图底图缺失，导出已中止<br>'+
+    '<button type="button" class="status-btn" id="exportRetryBtn">重试</button>'+
+    '<button type="button" class="status-btn" id="exportNoBasemapBtn">改用无底图导出</button>';
+  $('exportRetryBtn').addEventListener('click', () => { setExportStatus('', 'clear'); retryFn(); });
+  $('exportNoBasemapBtn').addEventListener('click', () => { setExportStatus('', 'clear'); exportForceNoBasemap = true; retryFn(); });
+}
 async function exportCard(){
+  const skipBasemap = exportForceNoBasemap;
+  exportForceNoBasemap = false;
   if(!trackPoints) return;
-  if($('mapOverlay').checked && (!window.mapOverlayState || mapOverlayNeedsRefresh)){
+  const mapActive = $('mapOverlay').checked;
+  if(mapActive && !skipBasemap && (!window.mapOverlayState || mapOverlayNeedsRefresh)){
     try { await onPreviewMapOverlay(); } catch(_) { /* onPreviewMapOverlay 已内部 catch，这里无 throw */ }
   }
+  if(mapActive && !skipBasemap && !window.mapOverlayState){
+    showExportBlockedStatus(exportCard);
+    return;
+  }
+  const savedOverlayState = window.mapOverlayState;
   const c=document.createElement('canvas');
   try {
+    if(skipBasemap) window.mapOverlayState = null;
     renderCard(c,+$('exportRes').value||1080);
   } catch(err) {
     console.error(err);
-    setMapStatus(`导出失败：${err.message}`,'error');
+    setExportStatus(`导出失败：${err.message}`,'error');
+    return;
+  } finally {
+    window.mapOverlayState = savedOverlayState;
+  }
+  download(c,'轨迹卡片.png',()=>setExportStatus('已下载「轨迹卡片.png」（不含定位点，可用「导出定位点 PNG」单独导出）','success'));
+}
+function exportDot(){
+  if(!trackPoints) return;
+  const off=document.createElement('canvas');
+  const dotExportPx = Math.round(+$('dotSize').value * (+$('exportRes').value||1080) / CARD_SIZE);
+  try {
+    renderDot(off, dotExportPx);
+  } catch(err) {
+    console.error(err);
+    setExportStatus(`导出失败：${err.message}`,'error');
     return;
   }
-  download(c,'轨迹卡片.png');
+  download(off,'定位点.png',()=>setExportStatus('已下载「定位点.png」','success'));
 }
 
 /* ---- MP4 动画导出（WebCodecs + vendored mp4-muxer） ---- */
@@ -1038,30 +1404,67 @@ async function pickMp4Codec(size,fps){
   }
   return null;
 }
+let mp4ExportInProgress = false;
+let mp4CancelRequested = false;
+function mp4BeforeUnloadHandler(e){
+  e.preventDefault();
+  e.returnValue = '';
+  return '';
+}
+function setMp4BeforeUnloadGuard(active){
+  if(active) window.addEventListener('beforeunload', mp4BeforeUnloadHandler);
+  else window.removeEventListener('beforeunload', mp4BeforeUnloadHandler);
+}
+function onExpMp4Click(){
+  if(mp4ExportInProgress){ mp4CancelRequested = true; return; }
+  exportMp4();
+}
 async function exportMp4(){
+  stopPreviewPlay();
+  const skipBasemap = exportForceNoBasemap;
+  exportForceNoBasemap = false;
   if(!trackPoints||!mp4Supported()) return;
-  if($('mapOverlay').checked && (!window.mapOverlayState || mapOverlayNeedsRefresh)){
+  const mapActive = $('mapOverlay').checked;
+  if(mapActive && !skipBasemap && (!window.mapOverlayState || mapOverlayNeedsRefresh)){
     try { await onPreviewMapOverlay(); } catch(_) { /* onPreviewMapOverlay 已内部 catch，这里无 throw */ }
   }
+  if(mapActive && !skipBasemap && !window.mapOverlayState){
+    showExportBlockedStatus(exportMp4);
+    return;
+  }
   const btn=$('expMp4');
-  const duration=Math.max(0.1,+$('mp4Duration').value||6);
+  const duration=clampMp4Duration(+$('mp4Duration').value);
   const fps=Math.max(1,+$('mp4Fps').value||30);
   const size=+$('exportRes').value||1080;
   const frames=Math.max(1,Math.round(duration*fps));
-  const opts=buildFrameOpts();
   const bitrate=MP4_BITRATE[size]||1.2e7;
+
+  const savedOverlayState = window.mapOverlayState;
+  let opts;
+  try {
+    if(skipBasemap) window.mapOverlayState = null;
+    opts = buildFrameOpts();
+  } finally {
+    window.mapOverlayState = savedOverlayState;
+  }
 
   const off=document.createElement('canvas');
   off.width=off.height=size;
   const offCtx=off.getContext('2d');
 
-  btn.disabled=true;
-  $('mp4Status').style.display='none';
+  mp4ExportInProgress = true;
+  mp4CancelRequested = false;
+  btn.textContent = '取消导出';
+  $('expCard').disabled = true;
+  $('expDot').disabled = true;
+  setMp4BeforeUnloadGuard(true);
+  setExportStatus('', 'clear');
   $('mp4ProgressWrap').style.display='';
   $('mp4Progress').value=0; $('mp4Progress').max=frames;
   $('mp4ProgressV').textContent='0%';
 
   let encoder=null;
+  let cancelled=false;
   try{
     const codec=await pickMp4Codec(size,fps);
     if(!codec) throw new Error('当前浏览器不支持所需的 H.264 编码，请使用最新版 Chrome / Edge，或较新版本的 Safari');
@@ -1076,6 +1479,7 @@ async function exportMp4(){
     encoder.configure({ codec, width:size, height:size, bitrate, framerate:fps });
 
     for(let i=0;i<frames;i++){
+      if(mp4CancelRequested){ cancelled=true; break; }
       if(encodeError) throw encodeError;
       const progress=frames>1 ? i/(frames-1) : 0;
       renderFrame(offCtx,size,progress,opts);
@@ -1086,6 +1490,12 @@ async function exportMp4(){
       $('mp4ProgressV').textContent=Math.round(((i+1)/frames)*100)+'% ('+(i+1)+'/'+frames+')';
       await new Promise(r=>setTimeout(r));
     }
+
+    if(cancelled){
+      setExportStatus('已取消','info');
+      return;
+    }
+
     await encoder.flush();
     if(encodeError) throw encodeError;
     muxer.finalize();
@@ -1095,21 +1505,83 @@ async function exportMp4(){
     a.href=URL.createObjectURL(blob); a.download='轨迹动画.mp4';
     a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 
-    $('mp4Status').textContent='导出成功，已下载「轨迹动画.mp4」';
-    $('mp4Status').style.display='';
+    setExportStatus('已下载「轨迹动画.mp4」','success');
   }catch(err){
     console.error(err);
-    $('mp4Status').textContent='导出失败：'+(err&&err.message?err.message:String(err));
-    $('mp4Status').style.display='';
+    setExportStatus('导出失败：'+(err&&err.message?err.message:String(err)),'error');
   }finally{
     if(encoder&&encoder.state&&encoder.state!=='closed'){ try{encoder.close();}catch(_){} }
-    btn.disabled=false;
+    mp4ExportInProgress = false;
+    mp4CancelRequested = false;
+    btn.textContent = '导出 MP4';
+    $('expCard').disabled = !trackPoints;
+    $('expDot').disabled = !trackPoints;
     $('mp4ProgressWrap').style.display='none';
+    setMp4BeforeUnloadGuard(false);
   }
 }
 
 /* ==================== 交互 ==================== */
+function clearTrackErrors(){
+  const el=$('trackErrors');
+  el.style.display='none';
+  el.textContent='';
+}
+function showTrackErrors(failedNames){
+  const el=$('trackErrors');
+  el.textContent='';
+  el.style.color='#ff453a';
+  const title=document.createElement('div');
+  title.textContent='解析失败：'+failedNames.join('、');
+  el.appendChild(title);
+  const help=document.createElement('div');
+  help.style.marginTop='4px';
+  help.textContent='支持 gpx/kml/tcx/fit/geojson/csv；行者/Strava/佳明等 App 的活动详情页都能导出 GPX';
+  el.appendChild(help);
+  const closeBtn=document.createElement('button');
+  closeBtn.type='button';
+  closeBtn.className='status-btn';
+  closeBtn.style.marginTop='6px';
+  closeBtn.textContent='关闭';
+  closeBtn.addEventListener('click',clearTrackErrors);
+  el.appendChild(closeBtn);
+  el.style.display='';
+}
+let trackUndoTimer=null;
+function clearTrackUndo(){
+  if(trackUndoTimer){ clearTimeout(trackUndoTimer); trackUndoTimer=null; }
+  const el=$('trackUndo');
+  el.style.display='none';
+  el.textContent='';
+}
+function showTrackUndo(removedFile,removedIndex){
+  clearTrackUndo();
+  const el=$('trackUndo');
+  el.textContent=`已移除「${removedFile.name}」 `;
+  const undoBtn=document.createElement('button');
+  undoBtn.type='button';
+  undoBtn.className='status-btn';
+  undoBtn.textContent='撤销';
+  undoBtn.addEventListener('click',()=>{
+    clearTrackUndo();
+    trackFiles=[...trackFiles.slice(0,removedIndex),removedFile,...trackFiles.slice(removedIndex)];
+    recomputeTrack();
+  });
+  el.appendChild(undoBtn);
+  el.style.display='';
+  trackUndoTimer=setTimeout(clearTrackUndo,5000);
+}
+function setTrackGate(hasTrack){
+  document.querySelectorAll('[data-gate]').forEach(el=>{
+    el.classList.toggle('needs-track',!hasTrack);
+    el.inert=!hasTrack;
+    if(hasTrack) el.removeAttribute('aria-disabled'); else el.setAttribute('aria-disabled','true');
+  });
+  const hint=$('trackGateHint');
+  if(hint) hint.style.display=hasTrack?'none':'';
+}
 async function loadTrackFiles(files){
+  clearTrackErrors();
   let added=0; const failed=[];
   for(const file of files){
     try{
@@ -1118,8 +1590,8 @@ async function loadTrackFiles(files){
       else failed.push(file.name);
     }catch(_){ failed.push(file.name); }
   }
-  if(failed.length) alert('无法解析：\n'+failed.join('\n'));
-  if(added) recomputeTrack();
+  if(failed.length) showTrackErrors(failed);
+  if(added){ clearTrackUndo(); recomputeTrack(); }
 }
 function recomputeTrack(){
   trackPoints=concatTrackPoints(trackFiles);
@@ -1127,64 +1599,134 @@ function recomputeTrack(){
   const km=trackDistanceKm(trackPoints);
   $('info').innerHTML=`合并 <b>${trackFiles.length}</b> 个文件 · <b>${trackPoints.length}</b> 个轨迹点 · 约 <b>${km.toFixed(1)}</b> km`;
   $('expCard').disabled=false;
+  $('expDot').disabled=false;
   if(mp4Supported()) $('expMp4').disabled=false;
+  $('previewScrub').style.display='';
+  setTrackGate(true);
   renderFileList();
-  if(window.mapOverlayState){
-    // 换轨迹后旧底图与新轨迹不再对应：立即降级为无底图渲染，提示重新预览
+  if($('mapOverlay').checked){
+    // 换轨迹后旧底图与新轨迹不再对应：立即降级为无底图渲染，有 key 则自动重新拉取
     window.mapOverlayState=null;
-    setMapStatus('轨迹已变，点「预览地图 overlay」重新拉取底图','warn');
+    const key=($('amapKey').value||'').trim();
+    if(key){ onPreviewMapOverlay(); }
+    else { setMapStatus('填写高德 key 后自动加载底图','info'); }
   }
   render();
   markOverlayNeedsRefresh();
 }
 function renderFileList(){
-  const el=$('fileList'); el.innerHTML='';
+  const el=$('fileList'); el.textContent='';
   trackFiles.forEach((f,i)=>{
     const row=document.createElement('div'); row.className='file-row';
-    row.innerHTML=`<span class="file-idx">${i+1}</span>`+
-      `<span class="file-name">${f.name}</span>`+
-      `<span class="file-meta">${f.format}·${f.points.length}</span>`+
-      `<span class="file-btns">`+
-        `<button data-act="up" data-i="${i}" ${i===0?'disabled':''}>↑</button>`+
-        `<button data-act="down" data-i="${i}" ${i===trackFiles.length-1?'disabled':''}>↓</button>`+
-        `<button data-act="del" data-i="${i}">✕</button>`+
-      `</span>`;
+    const idx=document.createElement('span'); idx.className='file-idx'; idx.textContent=String(i+1);
+    const name=document.createElement('span'); name.className='file-name'; name.textContent=f.name; name.setAttribute('title',f.name);
+    const meta=document.createElement('span'); meta.className='file-meta'; meta.textContent=`${f.format} · ${f.points.length} 点`;
+    const btns=document.createElement('span'); btns.className='file-btns';
+    const upBtn=document.createElement('button');
+    upBtn.type='button'; upBtn.dataset.act='up'; upBtn.dataset.i=String(i); upBtn.textContent='↑';
+    upBtn.setAttribute('aria-label',`上移 ${f.name}`);
+    if(i===0) upBtn.disabled=true;
+    const downBtn=document.createElement('button');
+    downBtn.type='button'; downBtn.dataset.act='down'; downBtn.dataset.i=String(i); downBtn.textContent='↓';
+    downBtn.setAttribute('aria-label',`下移 ${f.name}`);
+    if(i===trackFiles.length-1) downBtn.disabled=true;
+    const delBtn=document.createElement('button');
+    delBtn.type='button'; delBtn.dataset.act='del'; delBtn.dataset.i=String(i); delBtn.textContent='✕';
+    delBtn.setAttribute('aria-label',`删除 ${f.name}`);
+    btns.appendChild(upBtn); btns.appendChild(downBtn); btns.appendChild(delBtn);
+    row.appendChild(idx); row.appendChild(name); row.appendChild(meta); row.appendChild(btns);
     el.appendChild(row);
   });
 }
 function trackFileAction(act,i){
+  if(act==='del'){
+    const removedFile=trackFiles[i];
+    trackFiles=reorderTrackFiles(trackFiles,act,i);
+    recomputeTrack();
+    if(removedFile) showTrackUndo(removedFile,i);
+    return;
+  }
+  clearTrackUndo();
   trackFiles=reorderTrackFiles(trackFiles,act,i);
   recomputeTrack();
 }
 function clearTrack(){
   trackFiles=[]; trackPoints=null;
+  stopPreviewPlay();
+  $('previewScrub').style.display='none';
   $('info').innerHTML='尚未载入轨迹';
   $('expCard').disabled=true;
+  $('expDot').disabled=true;
   $('expMp4').disabled=true;
+  setTrackGate(false);
   renderFileList();
   render();
 }
 const drop=$('drop');
 drop.onclick=()=>$('file').click();
+drop.addEventListener('keydown',e=>{
+  if(e.key==='Enter'||e.key===' '||e.key==='Spacebar'){
+    e.preventDefault();
+    $('file').click();
+  }
+});
 $('file').onchange=e=>{ if(e.target.files.length) loadTrackFiles(Array.from(e.target.files)); e.target.value=''; };
-['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
-['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
-drop.addEventListener('drop',e=>{ if(e.dataTransfer.files.length) loadTrackFiles(Array.from(e.dataTransfer.files)); });
+// 页面级拖放防御：dragover/drop 一律 preventDefault，避免拖到 #drop 以外（尤其预览画布）时
+// 浏览器直接打开文件、丢光页面状态；drop 一律收敛到这一份逻辑处理，不与 #drop 重复触发。
+const cardbox=document.querySelector('.cardbox');
+const setDropHighlight=on=>{ drop.classList.toggle('over',on); cardbox.classList.toggle('over',on); };
+const onDragHover=e=>{ e.preventDefault(); setDropHighlight(true); };
+const onDragLeave=e=>{ e.preventDefault(); setDropHighlight(false); };
+['dragover','dragenter'].forEach(ev=>{ window.addEventListener(ev,onDragHover); document.addEventListener(ev,onDragHover); });
+window.addEventListener('dragleave',onDragLeave);
+document.addEventListener('dragleave',onDragLeave);
+window.addEventListener('drop',e=>e.preventDefault());
+document.addEventListener('drop',e=>{
+  e.preventDefault();
+  setDropHighlight(false);
+  if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length) loadTrackFiles(Array.from(e.dataTransfer.files));
+});
 $('fileList').addEventListener('click',e=>{ const b=e.target.closest('button[data-act]'); if(b) trackFileAction(b.dataset.act,+b.dataset.i); });
 
-// 选项联动
-const bind=(id,vid,fmt)=>{ const el=$(id); const upd=()=>{ if(vid)$(vid).textContent=fmt?fmt(el.value):el.value; render(); }; el.addEventListener('input',upd); upd(); };
+// 选项联动：field 范式 —— slider ↔ number 双向同步 + render；数值格式按 slider 的 step 小数位推导。
+const stepDecimals=step=>{ const s=String(step==null?'1':step); const i=s.indexOf('.'); return i<0?0:s.length-i-1; };
+const bind=(id,vid,after)=>{
+  const el=$(id), num=$(vid);
+  const decimals=stepDecimals(el.step);
+  const fmt=v=>decimals?(+v).toFixed(decimals):String(+v);
+  const fromSlider=()=>{ num.value=fmt(el.value); if(after)after(+el.value); render(); };
+  const fromNumber=()=>{
+    let v=parseFloat(num.value);
+    if(!Number.isFinite(v)) v=parseFloat(el.value);
+    v=Math.min(parseFloat(el.max),Math.max(parseFloat(el.min),v));
+    el.value=v; num.value=fmt(v);
+    if(after)after(v);
+    render();
+  };
+  el.addEventListener('input',fromSlider);
+  num.addEventListener('input',fromNumber);
+  num.addEventListener('change',fromNumber);
+  fromSlider();
+};
 bind('lineWidth','lineWidthV');
-bind('bgOpacity','bgOpacityV',v=>v+'%');
+bind('bgOpacity','bgOpacityV');
 bind('radius','radiusV');
 bind('pad','padV');
 bind('dotSize','dotSizeV');
 bind('markerSize','markerSizeV');
+bind('mapMaskOpacity','mapMaskOpacityV', v=>{ if(window.mapOverlayState) window.mapOverlayState.overlayMaskOpacity = v/100; });
+bind('mapViewScale','mapViewScaleV', v=>{ if(window.mapOverlayState) window.mapOverlayState.viewScale = v; });
 ['lineColor','bgColor','startColor','endColor','dotColor','showMarkers'].forEach(id=>$(id).addEventListener('input',render));
 
 $('expCard').onclick=exportCard;
-$('expMp4').onclick=exportMp4;
+$('expDot').onclick=exportDot;
+$('expMp4').onclick=onExpMp4Click;
 $('exportRes').addEventListener('change',render);
+$('mp4Duration').addEventListener('input',updatePreviewScrubLabel);
+$('mp4Duration').addEventListener('change',()=>{
+  $('mp4Duration').value = clampMp4Duration(+$('mp4Duration').value);
+  updatePreviewScrubLabel();
+});
 $('mp4BgMode').addEventListener('change',()=>{
   const green=$('mp4BgMode').value==='green';
   $('mp4PageColorField').style.display=green?'none':'';
@@ -1195,28 +1737,36 @@ $('mp4BgMode').addEventListener('change',()=>{
 const savedKey = localStorage.getItem('amap_key') || '';
 $('amapKey').value = savedKey;
 $('amapKey').addEventListener('input', () => {
-  localStorage.setItem('amap_key', $('amapKey').value.trim());
+  const trimmed = $('amapKey').value.trim();
+  if(trimmed) localStorage.setItem('amap_key', trimmed);
+  else localStorage.removeItem('amap_key');
   markOverlayNeedsRefresh();
+  scheduleMapAutoFetch();
 });
-$('mapTraffic').addEventListener('change', markOverlayNeedsRefresh);
-$('mapViewScale').addEventListener('input', () => {
-  const v = +$('mapViewScale').value;
-  $('mapViewScaleV').textContent = v.toFixed(2) + '×';
-  if(window.mapOverlayState){
-    window.mapOverlayState.viewScale = v;
-    render();
-  }
+$('mapTraffic').addEventListener('change', () => {
+  markOverlayNeedsRefresh();
+  scheduleMapAutoFetch();
 });
 $('mapOverlay').addEventListener('change', () => {
   const on = $('mapOverlay').checked;
+  updateBgModeUI();
   $('amapKey').disabled = !on;
   $('mapTraffic').disabled = !on;
   $('mapMaskOpacity').disabled = !on;
+  $('mapMaskOpacityV').disabled = !on;
   $('mapViewScale').disabled = !on;
+  $('mapViewScaleV').disabled = !on;
   document.querySelectorAll('input[name=mapOverlayMode]').forEach(el => el.disabled = !on);
   $('mapPreview').disabled = !on;
   if(on){
-    setMapStatus('点击「预览地图 overlay」即可看到效果', 'info');
+    const key = ($('amapKey').value || '').trim();
+    if(!trackPoints || trackPoints.length === 0){
+      setMapStatus('请先载入轨迹', 'info');
+    } else if(key){
+      onPreviewMapOverlay();
+    } else {
+      setMapStatus('填写高德 key 后自动加载底图', 'info');
+    }
   } else {
     window.mapOverlayState = null;
     mapOverlayNeedsRefresh = false;
@@ -1224,24 +1774,49 @@ $('mapOverlay').addEventListener('change', () => {
     render();
   }
 });
+document.querySelectorAll('input[name=bgMode]').forEach(el => {
+  el.addEventListener('change', () => {
+    const mapMode = $('bgModeMap').checked;
+    $('mapOverlay').checked = mapMode;
+    $('mapOverlay').dispatchEvent(new Event('change'));
+  });
+});
 document.querySelectorAll('input[name=mapOverlayMode]').forEach(el => {
   el.addEventListener('change', () => {
+    updateMapModeFieldsUI();
     if(window.mapOverlayState){
       window.mapOverlayState.overlayMode = document.querySelector('input[name=mapOverlayMode]:checked').value;
       render();
     }
   });
 });
-$('mapMaskOpacity').addEventListener('input', () => {
-  $('mapMaskOpacityV').textContent = $('mapMaskOpacity').value + '%';
-  if(window.mapOverlayState){
-    window.mapOverlayState.overlayMaskOpacity = (+$('mapMaskOpacity').value) / 100;
-    render();
-  }
-});
-
+updateBgModeUI();
+updateMapModeFieldsUI();
+updatePreviewScrubLabel();
+if(!mp4Supported()) $('mp4UnsupportedHint').style.display='';
+setTrackGate(false);
+window.addEventListener('resize', render);
 render();
 window.fetchAmapBasemap = fetchAmapBasemap; // for manual browser testing
+
+/* ==================== 示例轨迹 ==================== */
+$('loadSample').addEventListener('click', async () => {
+  try{
+    const resp = await fetch('sample-ride.gpx');
+    if(!resp.ok) throw new Error('sample fetch failed');
+    const blob = await resp.blob();
+    const file = new File([blob], 'sample-ride.gpx', { type: 'application/gpx+xml' });
+    await loadTrackFiles([file]);
+  }catch(err){
+    console.error(err);
+  }
+});
+(async () => {
+  try{
+    const resp = await fetch('sample-ride.gpx', { method: 'HEAD' });
+    if(resp && resp.ok) $('loadSample').hidden = false;
+  }catch(_){ /* file:// 或网络失败：保持隐藏 */ }
+})();
 </script>
 </body>
 </html>

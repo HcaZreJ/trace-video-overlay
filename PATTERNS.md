@@ -24,11 +24,24 @@
   等比缩放全部样式参数（pad/lineWidth/radius/markerSize/dotSize）。
 - `renderCard`（DOM 驱动，预览+PNG）与 `renderFrame`（opts 驱动，MP4 逐帧）保持同构逻辑；
   改渲染行为时两处同步。
-- 尺寸滑块语义统一为「可见外径」（600 基准像素）：起终点标记与定位点同数值 → 屏上同大；
-  定位点内圆/白环系数 0.385/0.115（和为 0.5）。
+- 尺寸滑块语义统一为「彩色核直径」（600 基准像素）：起终点标记 `r=size/2`，定位点几何
+  全部由 `dotGeometry(size)` 导出（coreR/ringW/outerR/pad/full/阴影），同数值 → 彩色核同大；
+  渲染层出现定位点的三处（renderCard 预览、renderFrame、renderDot）统一走 dotGeometry。
 - 地图 overlay 对齐模型：底图与轨迹共享同一 world→canvas 仿射变换
   `canvasPx = (worldPx(mercZoom) − centerPx) × k + size/2`，k 由
   `computeOverlayScale` 连续计算——对齐靠数学，UI 控件只调取景。
+
+## UI 结构（工作台）
+- 布局 = 左列 sticky 预览舞台（卡片 canvas + 动画扫拨行 + 轨迹统计 + 定位点图例）+
+  右列四个任务分区卡片：①轨迹 ②背景与卡片 ③线路与标记 ④导出；吸底元素只允许紧凑
+  单行操作条（`.export-actions`），整卡吸底会遮挡其余分区。
+- 数值参数一律 field 范式：标签（含单位）+ 全宽 slider + 右侧 number 输入，`bind()`
+  双向同步并对越界输入 clamp；互斥配置（纯色/地图底图）用 segmented 单选驱动渐进披露。
+- 状态反馈：导出类消息走 ④ 区 `#exportStatus`（成功 ✓ 4s 自清，失败 ✕ 持久），地图链
+  消息走 ② 区 `#mapOverlayStatus`，两者均 `aria-live="polite"`；用户可见报错为中文人话，
+  内部 `Error.code` 供程序分支。
+- 空状态：canvas 内绘引导文字，依赖轨迹的分区加 `.needs-track` 降透明度，示例轨迹按钮
+  提供零成本首个成功体验。
 
 ## 测试
 - Node 内置 `node:test` + `node:assert/strict`，零框架。
