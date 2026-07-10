@@ -549,10 +549,10 @@ export function dotGeometry(size) {
   return { coreR, ringW, outerR, pad, full, shadowBlur, shadowOffsetY };
 }
 
-// clampMp4Duration：MP4 导出时长的合法化（[1,60] 秒，非法输入回默认 6）。
+// clampMp4Duration：MP4 导出时长的合法化（[1,600] 秒，非法输入回默认 6）。
 export function clampMp4Duration(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 6;
-  return Math.min(60, Math.max(1, value));
+  return Math.min(600, Math.max(1, value));
 }
 
 // ==================== 沿弧长匀速插值定位点（progress∈[0,1] → 屏幕坐标） ====================
