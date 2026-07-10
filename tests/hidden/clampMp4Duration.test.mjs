@@ -9,11 +9,12 @@ import { clampMp4Duration } from '../../core.mjs';
 const IN_RANGE_CASES = [
   { input: 6, expected: 6 },
   { input: 1, expected: 1 },
-  { input: 60, expected: 60 },
+  { input: 600, expected: 600 },
   { input: 7.5, expected: 7.5 },
   { input: 1.0001, expected: 1.0001 },
-  { input: 59.9999, expected: 59.9999 },
-  { input: 30, expected: 30 },
+  { input: 599.9999, expected: 599.9999 },
+  { input: 60, expected: 60 },
+  { input: 300, expected: 300 },
 ];
 
 for (const { input, expected } of IN_RANGE_CASES) {
@@ -23,7 +24,7 @@ for (const { input, expected } of IN_RANGE_CASES) {
 }
 
 // ---------------------------------------------------------------------------
-// 超出 [1,60] 区间的有限数值：clamp 到最近边界
+// 超出 [1,600] 区间的有限数值：clamp 到最近边界
 // ---------------------------------------------------------------------------
 
 const OUT_OF_RANGE_CASES = [
@@ -31,10 +32,10 @@ const OUT_OF_RANGE_CASES = [
   { input: 0, expected: 1 },
   { input: -10, expected: 1 },
   { input: -0.0001, expected: 1 },
-  { input: 999, expected: 60 },
-  { input: 60.0001, expected: 60 },
-  { input: 61, expected: 60 },
-  { input: Number.MAX_SAFE_INTEGER, expected: 60 },
+  { input: 999, expected: 600 },
+  { input: 600.0001, expected: 600 },
+  { input: 601, expected: 600 },
+  { input: Number.MAX_SAFE_INTEGER, expected: 600 },
 ];
 
 for (const { input, expected } of OUT_OF_RANGE_CASES) {
@@ -77,7 +78,7 @@ test('clampMp4Duration 无参数调用（undefined）返回默认值 6', () => {
 // 全输入域有定义：不抛出任何异常
 // ---------------------------------------------------------------------------
 
-const ALL_INPUTS_NO_THROW = [6, 0.5, 999, 1, 60, NaN, Infinity, -Infinity, '6', undefined, null, {}, [], true, false];
+const ALL_INPUTS_NO_THROW = [6, 0.5, 999, 1, 600, NaN, Infinity, -Infinity, '6', undefined, null, {}, [], true, false];
 
 for (const value of ALL_INPUTS_NO_THROW) {
   test(`clampMp4Duration 不对输入 ${String(value)} 抛出异常`, () => {

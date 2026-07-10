@@ -180,18 +180,19 @@
       </div>
       <input type="checkbox" id="mapOverlay" hidden>
 
-      <div id="bgSolidFields">
-        <div class="field">
-          <label for="bgColor">底色</label>
-          <input type="color" id="bgColor" value="#000000">
+      <div class="field">
+        <label for="bgColor">底色</label>
+        <input type="color" id="bgColor" value="#000000">
+      </div>
+      <div class="field">
+        <label for="bgOpacity">底色不透明度（%）</label>
+        <div class="fieldrow">
+          <input type="range" id="bgOpacity" min="0" max="100" value="35">
+          <input type="number" id="bgOpacityV" class="val" min="0" max="100" step="1" value="35" aria-label="底色透明度数值输入">
         </div>
-        <div class="field">
-          <label for="bgOpacity">底色不透明度（%）</label>
-          <div class="fieldrow">
-            <input type="range" id="bgOpacity" min="0" max="100" value="35">
-            <input type="number" id="bgOpacityV" class="val" min="0" max="100" step="1" value="35" aria-label="底色透明度数值输入">
-          </div>
-        </div>
+        <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">
+          纯色模式下是卡片底；地图底图模式下垫在底图之下，取景缩放拉小露出的边界处可见。PNG 导出保留此处的透明度
+        </small>
       </div>
 
       <div id="bgMapFields" style="display:none">
@@ -231,7 +232,7 @@
             <input type="number" id="mapViewScaleV" class="val" min="0.5" max="1.5" step="0.05" value="1.00" disabled aria-label="取景缩放数值输入">
           </div>
           <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">
-            调整轨迹在卡片中的占比，底图与轨迹同步缩放、贴合关系保持；拉小可能露出底图边界（边界外为卡片背景）。
+            调整轨迹在卡片中的占比，底图与轨迹同步缩放、贴合关系保持；拉小可能露出底图边界（边界外为上方『底色』）。
           </small>
         </div>
         <div class="btns">
@@ -322,7 +323,8 @@
       <div class="row">
         <div class="field">
           <label for="mp4Duration">时长（秒）</label>
-          <input type="number" id="mp4Duration" class="val" min="1" max="60" step="0.5" value="6">
+          <input type="number" id="mp4Duration" class="val" min="1" max="600" step="0.5" value="6">
+          <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">上限 600 秒；文件大小约与时长成正比（1080p 约 90 MB/分钟）</small>
         </div>
         <div class="field">
           <label for="mp4Fps">帧率</label>
@@ -965,10 +967,10 @@ function dotGeometry(size) {
   return { coreR, ringW, outerR, pad, full, shadowBlur, shadowOffsetY };
 }
 
-// clampMp4Duration：MP4 导出时长的合法化（[1,60] 秒，非法输入回默认 6）。
+// clampMp4Duration：MP4 导出时长的合法化（[1,600] 秒，非法输入回默认 6）。
 function clampMp4Duration(value) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 6;
-  return Math.min(60, Math.max(1, value));
+  return Math.min(600, Math.max(1, value));
 }
 
 /* ==================== 渲染 ==================== */
@@ -1019,6 +1021,9 @@ function renderCard(canvas,size,opts={}){
     const rect = computeBasemapDrawRect(size, overlay.contentSize, k);
     ctx.save();
     ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
+    // 底色垫在底图之下：取景缩放 <1 露出的边界处显示底色（含透明度，PNG 导出直接保留）
+    ctx.fillStyle=hexToRgba($('bgColor').value,+$('bgOpacity').value/100);
+    ctx.fillRect(0,0,size,size);
     ctx.drawImage(overlay.basemapImage, rect.x, rect.y, rect.w, rect.h);
     if(overlay.overlayMode==='mask'){
       ctx.fillStyle=`rgba(0,0,0,${overlay.overlayMaskOpacity})`;
@@ -1107,6 +1112,9 @@ function renderFrame(ctx,size,progress,opts){
     const k = computeOverlayScale(opts.spanPx, size, pad, opts.viewScale);
     const rect = computeBasemapDrawRect(size, opts.contentSize, k);
     ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
+    // 底色垫在底图之下：与 renderCard 同构，取景缩放 <1 露出的边界处显示底色
+    ctx.fillStyle=hexToRgba(opts.bgColor,opts.bgOpacity);
+    ctx.fillRect(0,0,size,size);
     ctx.drawImage(opts.basemapImage, rect.x, rect.y, rect.w, rect.h);
     if(opts.overlayMode==='mask'){
       ctx.fillStyle=`rgba(0,0,0,${opts.overlayMaskOpacity})`;
@@ -1271,7 +1279,6 @@ function updateBgModeUI(){
   const mapMode = $('bgModeMap').checked;
   $('bgModeSolidLabel').classList.toggle('active', !mapMode);
   $('bgModeMapLabel').classList.toggle('active', mapMode);
-  $('bgSolidFields').style.display = mapMode ? 'none' : '';
   $('bgMapFields').style.display = mapMode ? '' : 'none';
 }
 function updateMapModeFieldsUI(){
@@ -1360,6 +1367,11 @@ function exportDot(){
 
 /* ---- MP4 动画导出（WebCodecs + vendored mp4-muxer） ---- */
 const MP4_BITRATE={720:6e6,1080:12e6,1440:20e6};
+// 让出主线程：MessageChannel 宏任务没有 setTimeout 的 4ms 钳制，后台标签页也不被节流
+const mp4YieldChannel=new MessageChannel();
+function mp4Yield(){
+  return new Promise(r=>{ mp4YieldChannel.port1.onmessage=()=>r(); mp4YieldChannel.port2.postMessage(0); });
+}
 function mp4Supported(){
   return 'VideoEncoder' in window && 'VideoFrame' in window &&
     typeof VideoEncoder.isConfigSupported==='function' && !!window.Mp4Muxer;
@@ -1488,7 +1500,12 @@ async function exportMp4(){
       frame.close();
       $('mp4Progress').value=i+1;
       $('mp4ProgressV').textContent=Math.round(((i+1)/frames)*100)+'% ('+(i+1)+'/'+frames+')';
-      await new Promise(r=>setTimeout(r));
+      // 背压：编码队列过深时等编码器消化，控制内存占用；否则只让出一个宏任务保持 UI 可响应
+      while(encoder.encodeQueueSize>6){
+        if('ondequeue' in encoder) await new Promise(r=>encoder.addEventListener('dequeue',r,{once:true}));
+        else await new Promise(r=>setTimeout(r,4));
+      }
+      await mp4Yield();
     }
 
     if(cancelled){

@@ -7,9 +7,9 @@ test('clampMp4Duration 区间内数值原样返回', () => {
   assert.equal(clampMp4Duration(7.5), 7.5);
 });
 
-test('clampMp4Duration 超出 [1,60] 区间的数值被 clamp 到边界', () => {
+test('clampMp4Duration 超出 [1,600] 区间的数值被 clamp 到边界', () => {
   assert.equal(clampMp4Duration(0.5), 1);
-  assert.equal(clampMp4Duration(999), 60);
+  assert.equal(clampMp4Duration(999), 600);
 });
 
 test('clampMp4Duration 非有限数字输入返回默认值 6', () => {
