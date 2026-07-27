@@ -1,74 +1,89 @@
 # trace-video-overlay
 
-把一次骑行的轨迹（GPX / KML / TCX / FIT / GeoJSON / CSV）渲染成视频剪辑用的**透明 PNG 贴图素材**或**MP4 动画**，专为剪映等剪辑软件设计。
+一份纯前端网页，把骑行 GPS 轨迹渲染成可以直接放进剪映等剪辑软件的角落贴图素材。
 
 在线使用：https://hcazrej.github.io/trace-video-overlay/
 
-## 导出什么
+## 这个 repo 解决什么问题
 
-- **地图卡片 PNG** — 分辨率可选 720/1080/1440，透明底，半透明圆角背景 + 线路 + 起终点标记。放进剪映当画中画贴在视频角落。
-- **定位点 PNG** — 预览区右键「图片另存为」保存，与卡片同分辨率等比。拖进剪映后用位置关键帧让它沿线路移动，表现「当前所在位置」。不想动就只放地图卡片。
-- **MP4 动画** — 卡片背景 + 定位点从起点匀速移动到终点，一键导出成品，无需手动打关键帧。
+剪辑软件里在成品视频上贴一条骑行轨迹，常见做法是把轨迹渲染成图片，作为画中画放在角落。这里有两个具体的限制卡住用户：
 
-## 为什么透明 PNG 是主要形态
+- **透明背景**：贴图需要透明背景才能浮在原素材之上。H.264 / H.265 编码的 MP4 不带 alpha 通道，剪映也不支持导入图片序列或者透明视频；能被剪映当画中画使用、又能带透明背景的，只有单张 PNG。
+- **让当前位置随视频进度移动**：想让「当前所在位置」的小圆点从起点沿线路移动到终点，需要一段动画。剪映本身只能对静态图打几个位置关键帧手动模拟。
 
-角落贴图需要透明背景才能浮在素材上。常见 MP4（H.264/H.265）不带 alpha 透明通道；剪映也不支持图片序列或透明视频导入，但完美支持单张透明 PNG 当画中画并对其打位置关键帧。所以透明 PNG 是最省事、最兼容的选择。MP4 是给不想手动打关键帧的场景准备的备选。
+这个 repo 把这两条路都做完，省掉用户自己搭 Canvas 或者找第三方脚本的工序：
 
-## 特点
+- 想要**手动打关键帧**的用户：导出两张透明 PNG（一张轨迹卡片、一张定位点），拖进剪映，对定位点打几个位置关键帧沿线路走。
+- 想要**一键出成品**的用户：直接导出一段 MP4，里面已经把定位点从起点匀速移到终点。
 
-- 默认纯前端、零依赖、全程本地处理，不发起网络请求
-- 复用主项目 [trace-photo-overlay](https://github.com/HcaZreJ/trace-photo-overlay) 的解析与投影逻辑
-- 线色 / 线宽 / 底色 / 底透明度 / 圆角 / 内边距 / 起终点标记 / 定位点样式均可调
+## 支持的输入格式
 
-## 地图底图 overlay（可选）
+浏览器端解析，全程不上传服务器。
 
-在原有的透明卡片之上，可选叠一层高德静态地图底图，让卡片同时显示街道、河流、地名等信息。默认关闭，需要在 UI 上手动勾选「开启地图底图 overlay」并填入自己的高德 API Key。
+| 格式 | 解析实现 |
+|---|---|
+| GPX | `extractGPXCoords` — DOMParser 读 `<trkpt>` / `<rtept>` |
+| KML | `extractKMLCoords` — 读 `gx:Track` / `LineString` / `Placemark` |
+| TCX | `extractTCXCoords` — 读 `<Trackpoint>` |
+| FIT | `parseFIT`（`fit.mjs`）— 自写的二进制解析器，读定义与数据消息里的 lat / lng / ele / time |
+| GeoJSON | `extractGeoJSONCoords` — 递归收集 LineString / MultiLineString |
+| CSV / TXT | `extractTextCoords` — 从任意分隔的文本里嗅探两列坐标 |
 
-**开启后的行为变化：**
+多个轨迹文件可以按拖入顺序首尾相连（`concatTrackPoints`），列表里支持上移、下移、删除、撤销。
 
-- 每次点击「预览地图 overlay」或点击导出（PNG / MP4），会向高德静态地图 API 发送**一次**请求，参数是当前轨迹的中心点、zoom 和 API Key。轨迹的完整点位不会上传，只上传中心点和 zoom。
-- MP4 导出全程共用同一张底图（不逐帧请求）。
-- 可选勾选「显示实时路况」，底图叠加高德实时路况图层；改动它后需重新点预览拉取新底图。
+## 产出什么
 
-**申请高德 API Key：**
+三种导出，共用同一份分辨率设置（720 / 1080 / 1440，正方形）：
 
-1. 打开 https://console.amap.com/dev/key/app
-2. 创建应用，服务平台选「Web 服务」
-3. 复制生成的 key，粘贴到 UI 的「高德 Web 服务 API Key」输入框
-4. Key 保存在浏览器 localStorage，下次打开自动填回
+- **轨迹卡片 PNG** — 圆角画布、可调透明度的底色、轨迹线路加起终点标记。底色透明度设成 0 就得到完全透明的贴图。渲染函数 `renderCard`。
+- **定位点 PNG** — 单独一个白环加彩色核的小圆点，用户在剪辑软件里对它打几个位置关键帧沿线路走。渲染函数 `renderDot`。
+- **MP4 动画** — 卡片背景加定位点，从进度 0 到 1 匀速走完整条线路。走 WebCodecs `VideoEncoder` 加一份 vendored 的 `mp4-muxer.js` 封装。时长上限 600 秒，帧率可选 24 / 30 / 60，画布可选卡片或者绿幕。导出过程中可以取消，关标签页会拦截。逐帧渲染函数 `renderFrame`，参数由 `buildFrameOpts` 打包，跟 DOM 解耦。
 
-个人开发者免费额度为每天 5000 次静态地图请求，一次骑行导出通常只用 1-2 次，日常使用足够。
+`renderCard` 和 `renderFrame` 复用 `core.mjs` 里的同一批投影 / 几何 / 拼接函数，改一处渲染行为要同步改另一处。
 
-**精度说明：**
+## 可选：地图底图
 
-- GPS 数据是 WGS84 坐标，高德地图底图是 GCJ-02 坐标。境内坐标使用国测局标准公式转换，误差小于 5 米。境外坐标原样发送，不保证与高德底图的精确对齐。
-- 高德静态地图只支持单一地图样式，不支持卫星图。底图恒以高清（scale=2）请求。
+默认关闭。开启后，卡片上会叠一层高德静态地图作为底图，让轨迹背后同时显示街道、河流、地名。开启需要用户填入自己的高德 Web 服务 API Key。
 
-**对齐与取景：**
+- **网络请求只有这一处**：向 `https://restapi.amap.com/v3/staticmap` 发一次请求（`fetchAmapBasemap`），把当前轨迹的中心点、zoom、canvas 尺寸和 key 传过去，拿回一张 PNG。MP4 导出的全部帧共用同一张底图，不逐帧请求。
+- **坐标系转换**：GPS 数据是 WGS84 坐标，高德底图是 GCJ-02。境内点走国测局公式（`wgs84ToGcj02`）转换到 GCJ-02 再投影，境外点原样发送。
+- **对齐**：高德静图 zoom 用 512px tile 基准，代码里用常量 `AMAP_STATIC_ZOOM_BIAS = 1` 换算到标准 256px Web Mercator，然后让底图和轨迹共享同一份 world → canvas 仿射变换。高德整数 zoom 之间的空隙由 `computeOverlayScale` 得到的一个连续缩放因子吸收。
+- **失败时的降级**：填错 key、请求失败、断网，卡片会自动回退到无底图渲染，其它导出功能不受影响。UI 会用中文提示对应的错误码（`diagnoseAmapApiError` 覆盖 `INVALID_USER_SCODE` 等常见返回）。
+- **key 的存放**：仅明文写入浏览器的 `localStorage.amap_key`，不上传到任何服务器。
 
-底图与轨迹的对齐是自动且精确的：高德静图的 zoom 按 512px tile 基准换算成标准 Web Mercator 后，底图和轨迹共用同一个投影变换渲染，像素级贴合，零手动校准。高德整数 zoom（1-17）与任意轨迹尺度之间的空隙由一个连续缩放因子在本地吸收，轨迹默认恰好占满卡片内边距以内的区域。
+个人开发者的高德免费额度是每天 5000 次静态图请求，一次骑行的日常导出用不完。
 
-- **取景缩放**（0.5-1.5，默认 1.0）：调整轨迹在卡片中的占比。底图与轨迹作为整体同步缩放，贴合关系始终保持；改这个只在本地重画，不重新请求底图。拉小到一定程度会露出底图边界，边界外显示卡片背景。
+## 代码结构
 
-正常流程：勾开 overlay → 填 key → 点预览，轨迹即贴合底图道路；想让轨迹占比大一点或小一点，拖「取景缩放」。
+无 build 步骤、无 npm 依赖、无框架、无 TypeScript。直接用浏览器打开 `index.html` 就能跑。
 
-**降级：**
-
-- 未填 key、key 无效或网络失败时，卡片自动回退到无底图渲染，其他功能不受影响。
-- 关闭「开启地图底图 overlay」开关，行为恢复到纯本地状态。
+| 文件 | 内容 |
+|---|---|
+| `core.mjs` | 纯函数集合：墨卡托投影、WGS84 → GCJ-02 转换、高德静图 URL 构造与对齐数学、轨迹平滑（`smoothTrack`）、多文件拼接（`concatTrackPoints`）、进度插值（`pointAtProgress`）、定位点几何（`dotGeometry`）、MP4 时长合法化（`clampMp4Duration`）、指标计算（距离、时长、均速、配速、爬升）、GeoJSON 与 CSV 解析。全部以 ES module 具名导出，node:test 覆盖。 |
+| `fit.mjs` | FIT 二进制解析，独立一个模块。 |
+| `index.html` | 应用本体：CSS、DOM、内联 script（含 core.mjs 里所有被页面使用的函数的逐字符同步副本，方便浏览器不通过 module 就能跑），文件载入、Canvas 渲染、动画预览、高德请求、MP4 导出管线（含取消与关页拦截）都在这一个文件里。 |
+| `mp4-muxer.js` | Vendored [Vanilagy/mp4-muxer](https://github.com/Vanilagy/mp4-muxer) 单文件构建，暴露全局 `Mp4Muxer`，把 WebCodecs 编码出的 chunk 封装成 MP4 容器。 |
+| `tests/visible/`、`tests/hidden/` | 用 Node 内置 `node:test` 跑的单元测试，覆盖 `core.mjs` 里的坐标转换、几何、URL 构造、参数合法化等纯逻辑。 |
+| `sample-ride.gpx`、`sample-route.gpx` | 内置示例轨迹；页面上「试试示例轨迹」按钮加载 `sample-ride.gpx`。 |
 
 ## 本地运行
 
-直接用浏览器打开 `index.html` 即可（或 `python3 -m http.server` 起个本地服务）。
+直接用浏览器打开 `index.html` 即可。想起一个静态服务器：
+
+```
+python3 -m http.server 8137
+```
+
+然后访问 `http://localhost:8137/`。
 
 ## 测试
 
-纯几何/解析函数在 `core.mjs`，用 Node 内置测试跑：
+Node v22+ 内置的 `node:test`：
 
 ```
-node --test
+node --test 'tests/**/*.test.mjs'
 ```
 
 ## 许可证
 
-PolyForm Noncommercial 1.0.0，见 [LICENSE](LICENSE)。
+PolyForm Noncommercial 1.0.0，见 [LICENSE](LICENSE)。禁止商用。

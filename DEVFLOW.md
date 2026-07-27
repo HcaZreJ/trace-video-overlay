@@ -11,7 +11,7 @@
 
 | 目的 | 命令 |
 |---|---|
-| 全量（根目录遗留 + visible + hidden，235 cases） | `node --test` |
+| 全量（根目录遗留 + visible + hidden） | `node --test` |
 | harness 测试全量（tests/ 下，visible + hidden） | `node --test 'tests/**/*.test.mjs'` |
 | 某单元 visible（implementer 自查） | `node --test tests/visible/<unit>.test.mjs` |
 | 某单元 hidden（架构师验收；implementer 走脚本只见跑分） | `node --test tests/hidden/<unit>.test.mjs` 或 `~/.claude/scripts/run-hidden-tests.sh <repo-root> <unit>` |
