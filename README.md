@@ -6,11 +6,11 @@
 
 ## Demo
 
-环太湖骑行一圈，4 段 FIT 按顺序拼接后导出的透明 PNG 与 MP4 动画：
+环太湖骑行一圈，4 段 FIT 按顺序拼接、叠加高德底图后导出的 PNG 与 MP4 动画：
 
-<img src="docs/demo-taihu.png" alt="环太湖轨迹（透明 PNG）" width="720">
+<img src="docs/demo-taihu.png" alt="环太湖轨迹" width="480">
 
-https://github.com/user-attachments/assets/2e7133dd-3ed5-484b-8c1e-2faa18b061c9
+<video src="https://github.com/user-attachments/assets/2e7133dd-3ed5-484b-8c1e-2faa18b061c9" width="480" controls muted></video>
 
 ## Features
 
