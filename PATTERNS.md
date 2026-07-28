@@ -31,6 +31,19 @@
   `canvasPx = (worldPx(mercZoom) − centerPx) × k + size/2`，k 由
   `computeOverlayScale` 连续计算——对齐靠数学，UI 控件只调取景。
 
+## 颜色选择器
+- 全站色块（`.cp-swatch`）触发同一个自定义 popup 组件，原生 `<input type="color">`
+  保留在 DOM 中并加 `.native-color-hidden` 隐藏，仍作为值容器供下游 `$('id').value` 读、
+  作为事件源派发 `input`（每次值变化）与 `change`（关闭 popup 时）；隐藏原生 input
+  的 CSS 用 `position:absolute;opacity:0;width:1px;height:1px;pointer-events:none`
+  以保留可 focus 语义。
+- 表达模式（HEX / RGB / HSL）用 `.segmented > .seg-opt` 分段控件（与工作台既有的
+  纯色/地图底图切换同款），当前项加 `.active` 复用 `--accent-strong` 底色；模式偏好
+  持久化于 `localStorage.colorPickerMode`，跨全站所有色块共享，缺省 `'hex'`。
+- 内部维护 `currentRgb` + `currentHsv` 双份状态：SV 面板与色相条要求连续浮点 hue
+  与 s/v，输入框展示要求整数 RGB/HSL；灰阶（`hsv.s === 0`）时保留旧 hue，避免光标
+  跳回 0。
+
 ## UI 结构（工作台）
 - 布局 = 左列 sticky 预览舞台（卡片 canvas + 动画扫拨行 + 轨迹统计 + 定位点图例）+
   右列四个任务分区卡片：①轨迹 ②背景与卡片 ③线路与标记 ④导出；吸底元素只允许紧凑

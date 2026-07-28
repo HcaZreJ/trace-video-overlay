@@ -18,6 +18,7 @@
 | 地图底图（segmented 纯色 / 地图切换、参数变化自动重拉、key 类型中文诊断与申请引导） | 已上线 |
 | 底图缺失时导出阻断（重试 / 一次性无底图导出） | 已上线 |
 | a11y 基线（label 关联、aria-live、键盘拖放区、focus-visible、主按钮对比度 ≥ 4.5:1） | 已上线 |
+| 自定义 Color Picker（SV 面板 + 色相条 + HEX/RGB/HSL 分段 tab + 吸管 + localStorage 保留模式） | 已上线 |
 
 ## 核心 Data Model
 - **轨迹点数组** `[{ lng, lat, ele?, time? }]`：所有解析器的统一输出，也是所有投影 / 渲染的统一输入。
