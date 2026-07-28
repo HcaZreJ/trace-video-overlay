@@ -10,9 +10,7 @@
 
 <img src="docs/demo-taihu.png" alt="环太湖轨迹（透明 PNG）" width="720">
 
-<!-- 待填：在任意 GitHub issue/PR 编辑框把导出的 mp4 拖进去（不用真的发），复制生成的 https://github.com/user-attachments/assets/... URL 替换下面这一行。GitHub 会把这样的 URL 单独一行自动渲染成播放器。 -->
-
-https://github.com/user-attachments/assets/REPLACE_ME
+https://github.com/user-attachments/assets/2e7133dd-3ed5-484b-8c1e-2faa18b061c9
 
 ## Features
 
