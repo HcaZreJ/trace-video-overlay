@@ -4,6 +4,17 @@
 
 **在线使用**：https://hcazrej.github.io/trace-video-overlay/
 
+## Demo
+
+环太湖骑行一圈，4 段 FIT 按顺序拼接、叠加高德底图后导出的 PNG 与 MP4 动画：
+
+<table>
+<tr>
+<td width="50%"><img src="docs/demo-taihu.png" alt="环太湖轨迹" width="100%"></td>
+<td width="50%"><video src="https://github.com/user-attachments/assets/2e7133dd-3ed5-484b-8c1e-2faa18b061c9" width="100%" controls muted></video></td>
+</tr>
+</table>
+
 ## Features
 
 - 六种轨迹格式在浏览器里解析：GPX、KML、TCX、FIT、GeoJSON、CSV。文件不上传服务器。
