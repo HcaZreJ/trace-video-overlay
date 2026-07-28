@@ -4,6 +4,16 @@
 
 **在线使用**：https://hcazrej.github.io/trace-video-overlay/
 
+## Demo
+
+环太湖骑行一圈，4 段 FIT 按顺序拼接后导出的透明 PNG 与 MP4 动画：
+
+<img src="docs/demo-taihu.png" alt="环太湖轨迹（透明 PNG）" width="720">
+
+<!-- 待填：在任意 GitHub issue/PR 编辑框把导出的 mp4 拖进去（不用真的发），复制生成的 https://github.com/user-attachments/assets/... URL 替换下面这一行。GitHub 会把这样的 URL 单独一行自动渲染成播放器。 -->
+
+https://github.com/user-attachments/assets/REPLACE_ME
+
 ## Features
 
 - 六种轨迹格式在浏览器里解析：GPX、KML、TCX、FIT、GeoJSON、CSV。文件不上传服务器。
