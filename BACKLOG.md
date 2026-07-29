@@ -75,8 +75,12 @@
         附带: 挖出并修掉一个 T3a 引入的 bug（见下方 fix 条目）；
               ui 层内留两条兄弟模块互依（map-panel↔preview、track-panel↔track-errors），
               跨层仍单向向下，T11 写进 PATTERNS
-- [ ] T9  取色器四拆         file: src/ui/color-picker/{index,popup,canvas,inputs}.mjs
-        deps: T8   验收: 各 ≤ 200 行；全量测试全绿；取色器七条交互路径手测通过
+- [x] T9  取色器四拆         file: src/ui/color-picker/{index,popup,canvas,inputs}.mjs
+        deps: T8   验收: 行级覆盖度守恒（原闭包 395 非空行，唯一去向变化是 initColorPickers()
+              移进 main.mjs，唯一新增是 7 行模块头注释）✅；最大 139 行 ✅；
+              main.mjs 624 → 193 行 ✅；578+57 全绿 ✅；
+              浏览器十条交互路径实测（含吸管桩）+ 改色后 #card 签名变化、改回原色签名
+              精确回到 356696 像素 / FNV 2995975869 ✅
 
 ### Wave 10–11 — 收尾
 
