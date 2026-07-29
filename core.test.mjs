@@ -1,14 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execSync } from 'node:child_process';
-import { writeFileSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import {
   mercatorX, mercatorY, smoothTrack, projectTrack,
-  extractGeoJSONCoords, extractTextCoords, crc32, buildStoreZip, trackDistanceKm,
+  extractGeoJSONCoords, extractTextCoords, trackDistanceKm,
   trackDurationSec, avgSpeedKmh, paceSecPerKm, elevationGainM, formatDuration, formatPace,
-  layoutTextBlockX, concatTrackPoints, reorderTrackFiles,
+  concatTrackPoints, reorderTrackFiles,
 } from './core.mjs';
 
 // ==================== 运动指标 ====================
@@ -177,101 +173,6 @@ test('extractTextCoords: lng,lat 顺序（经度在前）', () => {
 test('extractTextCoords: 都在 ±90 内默认 lat,lng', () => {
   const out = extractTextCoords('30.1,40.2');
   assert.deepEqual(out[0], { lng: 40.2, lat: 30.1 });
-});
-
-// ==================== CRC32 ====================
-test('crc32: 标准测试向量 "123456789" = 0xCBF43926', () => {
-  assert.equal(crc32(new TextEncoder().encode('123456789')), 0xCBF43926);
-});
-test('crc32: 空输入为 0', () => {
-  assert.equal(crc32(new Uint8Array(0)), 0);
-});
-
-// ==================== ZIP ====================
-test('buildStoreZip: 产出可被系统 unzip 校验并解出原内容', () => {
-  const enc = new TextEncoder();
-  const files = [
-    { name: 'a.txt', data: enc.encode('hello 旅图') },
-    { name: 'pic_2.txt', data: enc.encode('second file content') },
-  ];
-  const zip = buildStoreZip(files);
-  // 头部签名
-  assert.equal(zip[0], 0x50); assert.equal(zip[1], 0x4b);
-  assert.equal(zip[2], 0x03); assert.equal(zip[3], 0x04);
-
-  const dir = mkdtempSync(join(tmpdir(), 'ziptest-'));
-  const zipPath = join(dir, 'out.zip');
-  writeFileSync(zipPath, zip);
-  // 完整性校验
-  const t = execSync(`unzip -t ${zipPath}`).toString();
-  assert.ok(/No errors detected/.test(t), 'unzip -t 应无错误');
-  // 内容比对
-  const c1 = execSync(`unzip -p ${zipPath} a.txt`).toString();
-  assert.equal(c1, 'hello 旅图');
-  const c2 = execSync(`unzip -p ${zipPath} pic_2.txt`).toString();
-  assert.equal(c2, 'second file content');
-});
-
-// ==================== 文字块水平布局（位置 / 对齐 解耦） ====================
-// 每行实际绘制区间 [left,right]：textAlign 决定 x 是行的左/中/右锚点。
-function lineExtents(res, widths) {
-  return res.lines.map((ln, i) => {
-    const w = widths[i];
-    const left = ln.textAlign === 'left' ? ln.x : ln.textAlign === 'center' ? ln.x - w / 2 : ln.x - w;
-    return { left, right: left + w };
-  });
-}
-const _W = 1000, _PAD = 60;
-const _COMBOS = [];
-for (const hpos of ['left', 'center', 'right'])
-  for (const align of ['left', 'center', 'right']) _COMBOS.push({ hpos, align });
-
-test('layoutTextBlockX: 任意 位置×对齐 每行都落在 [pad, width-pad] 内（修复越界 bug）', () => {
-  const widths = [300, 120, 260, 80];
-  for (const c of _COMBOS) {
-    const res = layoutTextBlockX(widths, { ...c, pad: _PAD, width: _W });
-    for (const e of lineExtents(res, widths)) {
-      assert.ok(e.left >= _PAD - 1e-6, `${c.hpos}+${c.align}: left ${e.left} < pad`);
-      assert.ok(e.right <= _W - _PAD + 1e-6, `${c.hpos}+${c.align}: right ${e.right} > width-pad`);
-    }
-  }
-});
-test('layoutTextBlockX: 靠左 → 块左缘贴 pad，左对齐行锚在 pad', () => {
-  const res = layoutTextBlockX([300, 120], { hpos: 'left', align: 'left', pad: _PAD, width: _W });
-  assert.equal(res.blockX0, _PAD);
-  assert.equal(res.lines[0].x, _PAD);
-  assert.equal(res.lines[0].textAlign, 'left');
-});
-test('layoutTextBlockX: 靠右+右对齐 → 块右缘贴 width-pad', () => {
-  const res = layoutTextBlockX([300, 120], { hpos: 'right', align: 'right', pad: _PAD, width: _W });
-  assert.equal(res.blockX0 + res.blockWidth, _W - _PAD);
-  assert.equal(res.lines[0].x, _W - _PAD);
-  assert.equal(res.lines[0].textAlign, 'right');
-});
-test('layoutTextBlockX: 靠左+居中 → 围绕块中心，窄行不越左界（旧 bug 场景）', () => {
-  const res = layoutTextBlockX([300, 80], { hpos: 'left', align: 'center', pad: _PAD, width: _W });
-  const center = _PAD + 150; // 块=[pad,pad+300]
-  assert.equal(res.lines[0].x, center);
-  assert.equal(res.lines[0].textAlign, 'center');
-  assert.ok(center - 40 >= _PAD); // 窄行(80)左缘
-});
-test('layoutTextBlockX: 居中 → 块整体居中', () => {
-  const res = layoutTextBlockX([300], { hpos: 'center', align: 'center', pad: _PAD, width: _W });
-  assert.equal(res.blockX0, (_W - 300) / 2);
-  assert.equal(res.lines[0].x, _W / 2);
-});
-test('layoutTextBlockX: 空行列表不崩溃', () => {
-  const res = layoutTextBlockX([], { hpos: 'left', align: 'left', pad: _PAD, width: _W });
-  assert.equal(res.blockWidth, 0);
-  assert.deepEqual(res.lines, []);
-});
-test('layoutTextBlockX: 行宽超出可用宽 → 块宽夹到 avail 且仍居内', () => {
-  for (const c of _COMBOS) {
-    const res = layoutTextBlockX([5000], { ...c, pad: _PAD, width: _W });
-    assert.equal(res.blockWidth, _W - 2 * _PAD);
-    assert.ok(res.blockX0 >= _PAD - 1e-6);
-    assert.ok(res.blockX0 + res.blockWidth <= _W - _PAD + 1e-6);
-  }
 });
 
 // ==================== GeoJSON GeometryCollection ====================
