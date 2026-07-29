@@ -1,3 +1,62 @@
 # BACKLOG
 
-当前没有进行中的 work-unit。
+## 执行中 · Plan: split-index-html   (→ .claude/plans/split-index-html.md)
+
+工作树：`.claude/worktrees/split-index-html`，分支 `worktree-split-index-html`。
+基线：572 个测试全绿（`tests/**` 505 + `core.test.mjs` 64 + `fit.test.mjs` 3）。
+
+### Wave 1 — 无依赖 · 可并行
+
+- [x] T1a UI 测试取材抽共享模块（架构师亲做）   file: tests/helpers/source.mjs, 十个 UI 测试文件
+        spec: readCss / readJs / readAll 覆盖拆分前后两种形态，T1 与 T2 无需再改测试
+        验收: 改造前 505 全绿 → 改造后 505 全绿，零回归 ✅
+- [ ] T0  core.mjs 权威化   file: core.mjs, core.test.mjs, tests/{visible,hidden}/
+        spec: extractGeoJSONCoords（保留 ele + Array.isArray 守卫）· projectTrack（返回 fullSize）
+              · 移除 crc32 / buildStoreZip / layoutTextBlockX 及其 10 个测试
+        流程: 本单元有行为变化 → 走完整 test-first（test-author → 架构师审 → implementer）
+        验收: 全量测试全绿；core.test.mjs 测试块 64 → 54；三个被删导出零命中
+### Wave 2 — deps: T1a
+
+- [ ] T1  CSS 拆六个文件   file: styles/*.css, index.html
+        spec: 按行号连续切段 tokens(8–9) base(10–22) layout(23–98) forms(99–125)
+              components(126–164) color-picker(165–193)；<style> 删除改六条 <link>
+        验收: 六文件按 <link> 顺序拼接与原 8–193 行 diff 为空；全量测试全绿；页面外观不变
+
+### Wave 3 — deps: T0, T1
+
+- [ ] T2  应用逻辑迁出 src/main.mjs   file: src/main.mjs, index.html, vendor/mp4-muxer.js
+        spec: 476–2547 行整体切出；删 27 个内联副本改 import；mp4-muxer.js git mv 进 vendor/；
+              UI 测试的 JS 取材改读 src/main.mjs
+        验收: index.html ≤ 320 行无 <style> 无内联逻辑；守恒校验通过；全量测试全绿；
+              静态服务器手工过完整流程
+
+### Wave 3–9 — 逐层拆分（依次串行，各自依赖前一个）
+
+- [ ] T3  core 层七拆        file: src/core/{geo,gcj02,amap,metrics,color,track-files,export-params}.mjs
+        deps: T2   验收: 各 ≤ 200 行；core.mjs 删除；全量测试全绿；守恒校验通过
+- [ ] T4  parse 层           file: src/parse/{index,fit,geojson,csv,xml}.mjs
+        deps: T3   验收: 各 ≤ 200 行；fit.mjs 移入；全量测试全绿；守恒校验通过
+- [ ] T5  basemap 层         file: src/basemap/{diagnose,image,fetch}.mjs
+        deps: T4   验收: 各 ≤ 200 行；全量测试全绿；底图拉取与错误诊断手测通过
+- [ ] T6  render 层          file: src/render/{primitives,card,dot}.mjs
+        deps: T5   验收: 各 ≤ 200 行；全量测试全绿；三种渲染产物与拆分前一致
+- [ ] T7  export 层          file: src/export/{status,png,mp4}.mjs
+        deps: T6   验收: 各 ≤ 200 行；全量测试全绿；PNG · MP4 · 取消 · 关页拦截手测通过
+- [ ] T8  ui 层              file: src/ui/{dom,state,track-errors,track-panel,map-panel,preview,controls}.mjs
+        deps: T7   验收: 各 ≤ 200 行；main.mjs ≤ 200 行；全量测试全绿；面板交互手测通过
+- [ ] T9  取色器四拆         file: src/ui/color-picker/{index,popup,canvas,inputs}.mjs
+        deps: T8   验收: 各 ≤ 200 行；全量测试全绿；取色器七条交互路径手测通过
+
+### Wave 10–11 — 收尾
+
+- [ ] T10 测试收拢单一入口   file: tests/unit/{core,fit}.test.mjs
+        deps: T9   验收: `node --test 'tests/**/*.test.mjs'` 一条命令全量全绿；根目录无 *.test.mjs
+- [ ] T11 文档全面更新       file: AGENTS.md, PROJECT.md, PATTERNS.md, TECHSTACK.md, DEVFLOW.md, README.md
+        deps: T10  验收: 六份文档无 file:// / 双击 / 单文件 / 副本 / 抄；命令实测通过；
+              目录结构与 ls 一致
+
+### 全部完成后
+
+- [ ] 全量测试 + 只读终审（spec-compliance-reviewer ∥ quality-security-reviewer）
+- [ ] 拉 PR（不合并、不 push main，等用户处置）
+- [ ] 开 SEO GitHub issue（不在本 plan 实现范围内）

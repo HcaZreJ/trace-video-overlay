@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { readCss, readJs } from '../helpers/source.mjs';
 
 /* ==================== 通用工具：读文件 + 切三段 ==================== */
 
@@ -16,15 +17,6 @@ const SRC = readFileSync(INDEX_PATH, 'utf8');
 
 const collapse = (s) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** 所有 <style> 块的内容拼成一段 CSS */
-function extractStyleCss(src) {
-  const re = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
-  const out = [];
-  let m;
-  while ((m = re.exec(src)) !== null) out.push(m[1]);
-  return out.join('\n');
-}
 
 /** <body> 里的结构 HTML（剔除 script / style 块，只留标记） */
 function extractBodyHtml(src) {
@@ -35,14 +27,6 @@ function extractBodyHtml(src) {
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
 }
 
-/** 所有内联（无 src）<script> 的 JS 源码 */
-function extractInlineJs(src) {
-  const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
-  const out = [];
-  let m;
-  while ((m = re.exec(src)) !== null) if (!/\bsrc\s*=/i.test(m[1])) out.push(m[2]);
-  return out.join('\n');
-}
 
 /* ==================== CSS 极简解析（注释 / 规则 / 声明） ==================== */
 
@@ -301,9 +285,9 @@ function hasNearRe(text, needleRe, probe, radius) {
 
 /* ==================== 三段与常量 ==================== */
 
-const CSS = stripCssComments(extractStyleCss(SRC));
+const CSS = stripCssComments(readCss());
 const HTML = extractBodyHtml(SRC);
-const JS = collapse(extractInlineJs(SRC));
+const JS = collapse(readJs());
 const RULES = parseRules(CSS);
 const BASE = RULES.filter((r) => !r.media);
 

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { readCss, readJs, readInlineScripts } from '../helpers/source.mjs';
 
 /* ==================== index.html 三段切分（style / body HTML / 内联 script） ==================== */
 
@@ -11,18 +12,6 @@ const SRC = readFileSync(INDEX_PATH, 'utf8');
 /** 连续空白折叠成单空格并裁剪两端，让断言对换行与缩进宽容。 */
 const collapse = s => s.replace(/\s+/g, ' ').trim();
 
-/** 取全部 <style>…</style> 里的 CSS。 */
-function extractCss(src) {
-  return [...src.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
-}
-
-/** 取内联 <script>（不带 src 属性的那些；<script src="mp4-muxer.js"> 是外部引用）。 */
-function extractInlineScripts(src) {
-  return [...src.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
-    .filter(m => !/\bsrc\s*=/.test(m[1]))
-    .map(m => m[2]);
-}
-
 /** 取 <body>…</body> 内的标记，剔除 <script> 段，只留 HTML。 */
 function extractBodyHtml(src) {
   const m = src.match(/<body\b[^>]*>([\s\S]*?)<\/body>/);
@@ -30,9 +19,9 @@ function extractBodyHtml(src) {
   return m[1].replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 }
 
-const CSS = extractCss(SRC);
-const INLINE_SCRIPTS = extractInlineScripts(SRC);
-const JS = INLINE_SCRIPTS.join('\n');
+const CSS = readCss();
+const INLINE_SCRIPTS = readInlineScripts(SRC);
+const JS = readJs();
 const HTML = extractBodyHtml(SRC);
 
 /* ==================== HTML / JS 抽取小工具 ==================== */

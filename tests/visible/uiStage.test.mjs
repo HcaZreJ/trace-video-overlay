@@ -10,17 +10,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { readAll, readCss, readJs } from '../helpers/source.mjs';
 
 /* ==================== 读取与切段 ==================== */
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = readFileSync(join(ROOT, 'index.html'), 'utf8');
+/** 全站源码：「某段旧内容已彻底删除」这类断言的搜索范围。 */
+const ALL = readAll();
 
-const CSS = [...SRC.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n');
-const JS = [...SRC.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)]
-  .filter((m) => !/\bsrc\s*=/i.test(m[1]))
-  .map((m) => m[2])
-  .join('\n');
+const CSS = readCss();
+const JS = readJs();
 const HTML = ((/<body[^>]*>([\s\S]*)<\/body>/i.exec(SRC) || [null, SRC])[1])
   .replace(/<script[\s\S]*?<\/script>/gi, '')
   .replace(/<style[\s\S]*?<\/style>/gi, '')

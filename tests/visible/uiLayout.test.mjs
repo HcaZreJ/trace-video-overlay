@@ -15,16 +15,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { readCss, readJs } from '../helpers/source.mjs';
 
 /* ==================== index.html 三段切分 ==================== */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const RAW = readFileSync(join(ROOT, 'index.html'), 'utf8');
 
-const CSS = [...RAW.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map(m => m[1]).join('\n');
-const SCRIPT = [...RAW.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
-  .filter(m => !/\bsrc\s*=/i.test(m[1]))
-  .map(m => m[2])
-  .join('\n');
+const CSS = readCss();
+const SCRIPT = readJs();
 const BODY = (/<body\b[^>]*>([\s\S]*)<\/body>/i.exec(RAW)?.[1] ?? RAW)
   .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
   .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
