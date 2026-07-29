@@ -39,6 +39,12 @@
         deps: T2   验收: 33 个导出守恒无重名 ✅；函数体 md5 逐个一致 ✅；最大模块 167 行 ✅；
               依赖边正好 3 条无环 ✅；core.mjs 已删 ✅；634 个测试全绿 ✅；
               浏览器实测九模块全部 200 加载 ✅
+- [x] T3a 共享状态与 DOM 工具外置（架构师亲做）  file: src/state.mjs, src/dom.mjs, src/main.mjs
+        spec: 4 个跨层可变状态收进 state 对象；CARD_SIZE 具名导出；$ 迁入 dom.mjs。
+              两者都是叶子模块，避免 render/export → ui 反向依赖。
+        验收: 逆变换 diff 为空，改动面严格限于两类机械替换 ✅；634 个测试全绿 ✅；
+              浏览器载入示例轨迹走通完整链路（info 文案 · 文件列表 · has-track gate ·
+              canvas 356696 像素 · 导出解锁 · 扫拨标签）✅
 - [ ] T4  parse 层           file: src/parse/{index,fit,geojson,csv,xml}.mjs
         deps: T3   验收: 各 ≤ 200 行；fit.mjs 移入；全量测试全绿；守恒校验通过
 - [ ] T5  basemap 层         file: src/basemap/{diagnose,image,fetch}.mjs

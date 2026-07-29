@@ -30,18 +30,14 @@ import { concatTrackPoints, reorderTrackFiles } from './core/track-files.mjs';
 import { dotGeometry, clampMp4Duration } from './core/export-params.mjs';
 import { extractGeoJSONCoords } from './parse/geojson.mjs';
 import { extractTextCoords } from './parse/csv.mjs';
+import { state, CARD_SIZE } from './state.mjs';
+import { $ } from './dom.mjs';
 
-const $=id=>document.getElementById(id);
-const CARD_SIZE=600;
-let trackFiles=[];      // [{name,format,points}] 按列表顺序首尾拼接
-let trackPoints=null;   // = concatTrackPoints(trackFiles) 的派生结果
 // 地图 overlay 状态：null 表示未开启（默认）。开启时字段：
 // { basemapImage, mapCenter, mapZoom, spanPx, contentSize, viewScale,
 //   overlayMode: 'none'|'mask', overlayMaskOpacity: 0..1 }
 // 挂在 window 上（而非纯 let 局部变量）便于浏览器控制台手测
 window.mapOverlayState = null;
-let mapOverlayNeedsRefresh = false;  // 参数变化但还没预览时为 true
-let previewProgress = 0.5;  // 动画预览扫拨条进度 0..1，初始居中
 
 /* ==================== 轨迹解析 ==================== */
 async function parseTrackFile(file){
@@ -261,7 +257,7 @@ function renderCard(canvas,size,opts={}){
   const ctx=canvas.getContext('2d');
   canvas.width=canvas.height=size;
   ctx.clearRect(0,0,size,size);
-  if(!trackPoints){
+  if(!state.trackPoints){
     const emptyScale=size/CARD_SIZE;
     ctx.save();
     ctx.fillStyle='#8a93a2';
@@ -296,7 +292,7 @@ function renderCard(canvas,size,opts={}){
       ctx.fillStyle=`rgba(0,0,0,${overlay.overlayMaskOpacity})`;
       ctx.fillRect(0,0,size,size);
     }
-    const proj = projectTrackOnAmap(trackPoints,size,overlay.mapCenter,overlay.mapZoom,k);
+    const proj = projectTrackOnAmap(state.trackPoints,size,overlay.mapCenter,overlay.mapZoom,k);
     strokePath(ctx,proj,$('lineColor').value,lineWidth);
     if($('showMarkers').checked){
       const mr=+$('markerSize').value*scale;
@@ -324,7 +320,7 @@ function renderCard(canvas,size,opts={}){
   ctx.fillStyle=hexToRgba($('bgColor').value,+$('bgOpacity').value/100);
   ctx.fillRect(0,0,size,size);
 
-  const proj=projectTrack(trackPoints,size-2*pad);
+  const proj=projectTrack(state.trackPoints,size-2*pad);
   ctx.save(); ctx.translate(pad,pad);
   strokePath(ctx,proj,$('lineColor').value,lineWidth);
   if($('showMarkers').checked){
@@ -366,7 +362,7 @@ function renderFrame(ctx,size,progress,opts){
   const radius=opts.radius*scale, pad=opts.pad*scale, lineWidth=opts.lineWidth*scale;
 
   ctx.clearRect(0,0,size,size);
-  if(!trackPoints) return;
+  if(!state.trackPoints) return;
 
   // 背景第一层：整帧不透明（MP4 无 alpha，避免透出黑）
   ctx.fillStyle=(opts.bgMode==='green')?opts.greenColor:opts.pageColor;
@@ -387,7 +383,7 @@ function renderFrame(ctx,size,progress,opts){
       ctx.fillStyle=`rgba(0,0,0,${opts.overlayMaskOpacity})`;
       ctx.fillRect(0,0,size,size);
     }
-    proj = projectTrackOnAmap(trackPoints,size,opts.mapCenter,opts.mapZoom,k);
+    proj = projectTrackOnAmap(state.trackPoints,size,opts.mapCenter,opts.mapZoom,k);
   } else {
     if(opts.bgMode!=='green'){
       // 卡片模式：圆角裁剪 + 叠半透明卡片底，线路/标记/定位点都画在圆角内
@@ -395,7 +391,7 @@ function renderFrame(ctx,size,progress,opts){
       ctx.fillStyle=hexToRgba(opts.bgColor,opts.bgOpacity);
       ctx.fillRect(0,0,size,size);
     }
-    proj=projectTrack(trackPoints,size-2*pad);
+    proj=projectTrack(state.trackPoints,size-2*pad);
     ctx.translate(pad,pad);
   }
   strokePath(ctx,proj,opts.lineColor,lineWidth);
@@ -419,7 +415,7 @@ function renderFrame(ctx,size,progress,opts){
 }
 function render(){
   try {
-    renderCard($('card'),CARD_SIZE,{previewDot:true, previewProgress});
+    renderCard($('card'),CARD_SIZE,{previewDot:true, previewProgress: state.previewProgress});
   } catch(err) {
     console.error(err);
     setMapStatus(`渲染失败：${err.message}`,'error');
@@ -440,10 +436,10 @@ function previewPlayStep(ts){
   if(previewPlayLastTs !== null){
     const dt = ts - previewPlayLastTs;
     const durationMs = clampMp4Duration(+$('mp4Duration').value) * 1000;
-    let p = previewProgress + dt / durationMs;
+    let p = state.previewProgress + dt / durationMs;
     p = p % 1;
-    previewProgress = p;
-    $('previewProgress').value = Math.round(previewProgress * 1000);
+    state.previewProgress = p;
+    $('previewProgress').value = Math.round(state.previewProgress * 1000);
     render();
   }
   previewPlayLastTs = ts;
@@ -472,7 +468,7 @@ $('previewPlay').addEventListener('click', () => {
 });
 $('previewProgress').addEventListener('input', () => {
   if(previewPlaying) stopPreviewPlay();
-  previewProgress = (+$('previewProgress').value) / 1000;
+  state.previewProgress = (+$('previewProgress').value) / 1000;
   render();
 });
 
@@ -485,7 +481,7 @@ function setMapStatus(msg, kind){
   el.style.color = kind === 'error' ? '#ff453a' : kind === 'warn' ? '#ff9f0a' : kind === 'ok' ? '#34c759' : 'var(--dim)';
 }
 function markOverlayNeedsRefresh(){
-  mapOverlayNeedsRefresh = true;
+  state.mapOverlayNeedsRefresh = true;
 }
 let mapFetchInFlight = false;
 let mapFetchPending = false;
@@ -495,7 +491,7 @@ function scheduleMapAutoFetch(){
   mapAutoFetchTimer = setTimeout(() => {
     mapAutoFetchTimer = null;
     const key = ($('amapKey').value || '').trim();
-    if($('mapOverlay').checked && key && trackPoints && trackPoints.length){
+    if($('mapOverlay').checked && key && state.trackPoints && state.trackPoints.length){
       onPreviewMapOverlay();
     }
   }, 600);
@@ -503,14 +499,14 @@ function scheduleMapAutoFetch(){
 async function onPreviewMapOverlay(){
   const key = ($('amapKey').value || '').trim();
   if(!key){ setMapStatus('请先填写高德 API Key', 'error'); return; }
-  if(!trackPoints || trackPoints.length === 0){ setMapStatus('请先载入轨迹', 'error'); return; }
+  if(!state.trackPoints || state.trackPoints.length === 0){ setMapStatus('请先载入轨迹', 'error'); return; }
   if(mapFetchInFlight){ mapFetchPending = true; return; }
   mapFetchInFlight = true;
   const btn = $('mapPreview');
   btn.disabled = true; setMapStatus('正在拉取底图…', 'info');
   try {
     const result = await fetchAmapBasemap({
-      pointsWgs84: trackPoints,
+      pointsWgs84: state.trackPoints,
       key,
       traffic: $('mapTraffic').checked ? 1 : undefined,
     });
@@ -524,7 +520,7 @@ async function onPreviewMapOverlay(){
       overlayMode: document.querySelector('input[name=mapOverlayMode]:checked').value,
       overlayMaskOpacity: (+$('mapMaskOpacity').value) / 100,
     };
-    mapOverlayNeedsRefresh = false;
+    state.mapOverlayNeedsRefresh = false;
     setMapStatus(`✓ 底图已加载（缩放级别 ${result.zoom}）`, 'ok');
     render();
   } catch(err){
@@ -612,9 +608,9 @@ function showExportBlockedStatus(retryFn){
 async function exportCard(){
   const skipBasemap = exportForceNoBasemap;
   exportForceNoBasemap = false;
-  if(!trackPoints) return;
+  if(!state.trackPoints) return;
   const mapActive = $('mapOverlay').checked;
-  if(mapActive && !skipBasemap && (!window.mapOverlayState || mapOverlayNeedsRefresh)){
+  if(mapActive && !skipBasemap && (!window.mapOverlayState || state.mapOverlayNeedsRefresh)){
     try { await onPreviewMapOverlay(); } catch(_) { /* onPreviewMapOverlay 已内部 catch，这里无 throw */ }
   }
   if(mapActive && !skipBasemap && !window.mapOverlayState){
@@ -636,7 +632,7 @@ async function exportCard(){
   download(c,'轨迹卡片.png',()=>setExportStatus('已下载「轨迹卡片.png」','success'));
 }
 function exportDot(){
-  if(!trackPoints) return;
+  if(!state.trackPoints) return;
   const off=document.createElement('canvas');
   const dotExportPx = Math.round(+$('dotSize').value * (+$('exportRes').value||1080) / CARD_SIZE);
   try {
@@ -719,9 +715,9 @@ async function exportMp4(){
   stopPreviewPlay();
   const skipBasemap = exportForceNoBasemap;
   exportForceNoBasemap = false;
-  if(!trackPoints||!mp4Supported()) return;
+  if(!state.trackPoints||!mp4Supported()) return;
   const mapActive = $('mapOverlay').checked;
-  if(mapActive && !skipBasemap && (!window.mapOverlayState || mapOverlayNeedsRefresh)){
+  if(mapActive && !skipBasemap && (!window.mapOverlayState || state.mapOverlayNeedsRefresh)){
     try { await onPreviewMapOverlay(); } catch(_) { /* onPreviewMapOverlay 已内部 catch，这里无 throw */ }
   }
   if(mapActive && !skipBasemap && !window.mapOverlayState){
@@ -816,8 +812,8 @@ async function exportMp4(){
     mp4ExportInProgress = false;
     mp4CancelRequested = false;
     btn.textContent = '导出 MP4';
-    $('expCard').disabled = !trackPoints;
-    $('expDot').disabled = !trackPoints;
+    $('expCard').disabled = !state.trackPoints;
+    $('expDot').disabled = !state.trackPoints;
     setExportKindLocked(false);
     $('mp4ProgressWrap').style.display='none';
     setMp4BeforeUnloadGuard(false);
@@ -867,7 +863,7 @@ function showTrackUndo(removedFile,removedIndex){
   undoBtn.textContent='撤销';
   undoBtn.addEventListener('click',()=>{
     clearTrackUndo();
-    trackFiles=[...trackFiles.slice(0,removedIndex),removedFile,...trackFiles.slice(removedIndex)];
+    state.trackFiles=[...trackFiles.slice(0,removedIndex),removedFile,...trackFiles.slice(removedIndex)];
     recomputeTrack();
   });
   el.appendChild(undoBtn);
@@ -894,7 +890,7 @@ async function loadTrackFiles(files){
   for(const file of files){
     try{
       const r=await parseTrackFile(file);
-      if(r){ trackFiles.push({name:file.name,format:r.format,points:r.points}); added++; }
+      if(r){ state.trackFiles.push({name:file.name,format:r.format,points:r.points}); added++; }
       else failed.push(file.name);
     }catch(_){ failed.push(file.name); }
   }
@@ -902,10 +898,10 @@ async function loadTrackFiles(files){
   if(added){ clearTrackUndo(); recomputeTrack(); }
 }
 function recomputeTrack(){
-  trackPoints=concatTrackPoints(trackFiles);
-  if(!trackPoints){ clearTrack(); return; }
-  const km=trackDistanceKm(trackPoints);
-  $('info').innerHTML=`合并 <b>${trackFiles.length}</b> 个文件 · <b>${trackPoints.length}</b> 个轨迹点 · 约 <b>${km.toFixed(1)}</b> km`;
+  state.trackPoints=concatTrackPoints(state.trackFiles);
+  if(!state.trackPoints){ clearTrack(); return; }
+  const km=trackDistanceKm(state.trackPoints);
+  $('info').innerHTML=`合并 <b>${state.trackFiles.length}</b> 个文件 · <b>${state.trackPoints.length}</b> 个轨迹点 · 约 <b>${km.toFixed(1)}</b> km`;
   $('expCard').disabled=false;
   $('expDot').disabled=false;
   if(mp4Supported()) $('expMp4').disabled=false;
@@ -924,7 +920,7 @@ function recomputeTrack(){
 }
 function renderFileList(){
   const el=$('fileList'); el.textContent='';
-  trackFiles.forEach((f,i)=>{
+  state.trackFiles.forEach((f,i)=>{
     const row=document.createElement('div'); row.className='file-row';
     const idx=document.createElement('span'); idx.className='file-idx'; idx.textContent=String(i+1);
     const name=document.createElement('span'); name.className='file-name'; name.textContent=f.name; name.setAttribute('title',f.name);
@@ -937,7 +933,7 @@ function renderFileList(){
     const downBtn=document.createElement('button');
     downBtn.type='button'; downBtn.dataset.act='down'; downBtn.dataset.i=String(i); downBtn.textContent='↓';
     downBtn.setAttribute('aria-label',`下移 ${f.name}`);
-    if(i===trackFiles.length-1) downBtn.disabled=true;
+    if(i===state.trackFiles.length-1) downBtn.disabled=true;
     const delBtn=document.createElement('button');
     delBtn.type='button'; delBtn.dataset.act='del'; delBtn.dataset.i=String(i); delBtn.textContent='✕';
     delBtn.setAttribute('aria-label',`删除 ${f.name}`);
@@ -948,18 +944,18 @@ function renderFileList(){
 }
 function trackFileAction(act,i){
   if(act==='del'){
-    const removedFile=trackFiles[i];
-    trackFiles=reorderTrackFiles(trackFiles,act,i);
+    const removedFile=state.trackFiles[i];
+    state.trackFiles=reorderTrackFiles(state.trackFiles,act,i);
     recomputeTrack();
     if(removedFile) showTrackUndo(removedFile,i);
     return;
   }
   clearTrackUndo();
-  trackFiles=reorderTrackFiles(trackFiles,act,i);
+  state.trackFiles=reorderTrackFiles(state.trackFiles,act,i);
   recomputeTrack();
 }
 function clearTrack(){
-  trackFiles=[]; trackPoints=null;
+  state.trackFiles=[]; state.trackPoints=null;
   stopPreviewPlay();
   $('previewScrub').style.display='none';
   $('info').innerHTML='尚未载入轨迹';
@@ -983,7 +979,7 @@ $('file').onchange=e=>{ if(e.target.files.length) loadTrackFiles(Array.from(e.ta
 // 浏览器直接打开文件、丢光页面状态；drop 一律收敛到这一份逻辑处理，不与 #drop 重复触发。
 const cardbox=document.querySelector('.cardbox');
 // 空状态下画布本身就是第二个「载入轨迹」入口；有轨迹后画布只是预览，点击不再选文件
-cardbox.addEventListener('click',()=>{ if(trackPoints) return; $('file').click(); });
+cardbox.addEventListener('click',()=>{ if(state.trackPoints) return; $('file').click(); });
 const setDropHighlight=on=>{ drop.classList.toggle('over',on); cardbox.classList.toggle('over',on); };
 const onDragHover=e=>{ e.preventDefault(); setDropHighlight(true); };
 const onDragLeave=e=>{ e.preventDefault(); setDropHighlight(false); };
@@ -1094,7 +1090,7 @@ $('mapOverlay').addEventListener('change', () => {
   $('mapPreview').disabled = !on;
   if(on){
     const key = ($('amapKey').value || '').trim();
-    if(!trackPoints || trackPoints.length === 0){
+    if(!state.trackPoints || state.trackPoints.length === 0){
       setMapStatus('请先载入轨迹', 'info');
     } else if(key){
       onPreviewMapOverlay();
@@ -1103,7 +1099,7 @@ $('mapOverlay').addEventListener('change', () => {
     }
   } else {
     window.mapOverlayState = null;
-    mapOverlayNeedsRefresh = false;
+    state.mapOverlayNeedsRefresh = false;
     setMapStatus('', 'clear');
     render();
   }

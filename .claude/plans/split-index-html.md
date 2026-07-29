@@ -320,6 +320,35 @@ tests/
     每个 src/core/*.mjs ≤ 200 行；`git grep -c '^export' core.mjs` 报文件不存在；
     全量测试全绿（数量以 T0 交付后的实测基线为准）；守恒校验通过。
 
+- id: T3a
+  title: 共享状态与 DOM 工具外置为叶子模块
+  file_path: src/state.mjs, src/dom.mjs, src/main.mjs
+  functions:
+    - name: state.mjs
+      behavioral_contract: |
+        main.mjs 里有 15 个模块级可变绑定，其中 11 个只在单一职责范围内使用，
+        会跟着各自的层一起迁走；4 个跨层共享：trackFiles · trackPoints
+        · previewProgress · mapOverlayNeedsRefresh，共 49 处引用。
+        这 4 个收进 `export const state = { ... }` 一个对象里。
+        用对象属性而非具名 let，是因为 ES module 的导入绑定只读，
+        属性写入才能让各层既读又写同一份状态。
+        常量 CARD_SIZE 作为具名导出。
+        全仓对这 4 个名字的引用做机械替换：裸标识符 → `state.` 前缀，读写两侧同样处理。
+    - name: dom.mjs
+      behavioral_contract: |
+        `$ = id => document.getElementById(id)`（main.mjs 里用了 165 次）迁入。
+        这是 DOM 取元素的工具，不是界面逻辑，作为叶子模块供各层导入，
+        依赖图上不构成任何环。
+  dependencies: [T3]
+  reuse_candidates: |
+    这两个模块 plan 原本挂在 ui/ 下。落到 src/ 顶层是因为 render 层与 export 层
+    同样要读它们，挂在 ui/ 下会造成 render → ui 的反向依赖。
+  acceptance: |
+    本单元是全 plan 里唯一允许改动函数体文本的单元，改动面限定为
+    「4 个标识符加 state. 前缀」与「$ 改为导入」两类，逐处可机械核对；
+    除此之外每一行逐字符不变。
+    全量测试全绿；无头 Chrome 探针结果与本单元前逐字段一致。
+
 - id: T4
   title: 轨迹解析层抽出为 src/parse/
   file_path: src/parse/{index,fit,geojson,csv,xml}.mjs, src/main.mjs, fit.mjs, tests/**
@@ -356,10 +385,14 @@ tests/
   functions:
     - name: 渲染层切分
       behavioral_contract: |
-        hexToRgba · strokePath · drawMarker 进 primitives.mjs；
+        hexToRgba · strokePath · drawMarker 进 primitives.mjs，这三个纯粹收参数画图，零导入；
         renderCard 与 renderFrame 同进 card.mjs（两者渲染同构，同文件让同步约束在一屏内可见）；
-        renderDot 进 dot.mjs。
-        这一层收 canvas 与参数对象，不读界面 DOM、不读全局状态。函数体逐字不动。
+        renderDot 进 dot.mjs。函数体逐字不动。
+
+        这一层的实际边界：收 canvas，从 state.mjs 读轨迹与进度，用 dom.mjs 的 $ 取控件当前值，
+        往 canvas 上画。它不写 DOM、不绑事件、不改 state。
+        renderCard 直接读 13 个控件取值而不像 renderFrame 那样收 opts 对象，
+        这个不对称是既有形态，本单元不改它。
   dependencies: [T5]
   reuse_candidates: 不适用，纯切割。
   acceptance: 每个模块 ≤ 200 行；全量测试全绿；静态服务器下三种渲染产物与拆分前像素一致。
@@ -520,6 +553,10 @@ T1–T11 是行为零变化的搬迁，spec 就是「搬完之后既有 572 个�
 
 **按行号切割，不手抄。** 每个搬迁单元用 `sed -n '<start>,<end>p'` 取源码段，
 再补 `import` / `export`。
+
+**函数体文本改动只发生在 T3a。** 那一个单元把 4 个跨层共享状态收进 state 对象、
+把 `$` 改为导入，改动面是两类可枚举的机械替换。T3a 之后的每个单元重新回到
+「只搬不改」，函数体逐字符守恒。
 
 **守恒校验。** 每个搬迁单元交付时附带校验：把新模块的函数体与源文件对应行号段做 `diff`，
 除 `import` / `export` 关键字外应为空。CSS 单元的校验是六个文件按 `<link>` 顺序拼接后
