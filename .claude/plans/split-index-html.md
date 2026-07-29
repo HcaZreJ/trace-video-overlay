@@ -262,9 +262,9 @@ tests/
           layout.css        23–98    workspace · drop · info · stage · cardbox · scrub
                                      · dotbox · controls · step · subhead · map-subpanel
                                      · gate-hint · needs-track · 断点
-          forms.css         99–125   input[type=text|range] · select · fieldrow · val
-                                     · row · check · segmented
-          components.css    126–164  keyhelp · privacy-note · btns · button.exp
+          forms.css         99–126   input[type=text|range] · select · fieldrow · val
+                                     · row · check · segmented · 它们的 760px 断点
+          components.css    127–164  keyhelp · privacy-note · btns · button.exp
                                      · export-actions · status-btn · hint · file-list
                                      · input[type=file]
           color-picker.css  165–193  .cp-* 全部

@@ -10,17 +10,18 @@
 - [x] T1a UI 测试取材抽共享模块（架构师亲做）   file: tests/helpers/source.mjs, 十个 UI 测试文件
         spec: readCss / readJs / readAll 覆盖拆分前后两种形态，T1 与 T2 无需再改测试
         验收: 改造前 505 全绿 → 改造后 505 全绿，零回归 ✅
-- [ ] T0  core.mjs 权威化   file: core.mjs, core.test.mjs, tests/{visible,hidden}/
-        spec: extractGeoJSONCoords（保留 ele + Array.isArray 守卫）· projectTrack（返回 fullSize）
-              · 移除 crc32 / buildStoreZip / layoutTextBlockX 及其 10 个测试
-        流程: 本单元有行为变化 → 走完整 test-first（test-author → 架构师审 → implementer）
-        验收: 全量测试全绿；core.test.mjs 测试块 64 → 54；三个被删导出零命中
+- [x] T0  core.mjs 权威化   file: core.mjs, core.test.mjs, tests/{visible,hidden}/geojsonCoords
+        spec: extractGeoJSONCoords 点构造加 ele · 移除 crc32 / buildStoreZip / layoutTextBlockX
+        流程: 走完了 test-first（test-author 72 例 → 架构师审过放行 → implementer）
+        验收: hidden 跑分 81/81 ✅；tests/ 577/577 ✅；根目录 57/57 ✅；
+              core.test.mjs 测试块 64 → 54 ✅；三个被删导出零残留 ✅
 ### Wave 2 — deps: T1a
 
-- [ ] T1  CSS 拆六个文件   file: styles/*.css, index.html
-        spec: 按行号连续切段 tokens(8–9) base(10–22) layout(23–98) forms(99–125)
-              components(126–164) color-picker(165–193)；<style> 删除改六条 <link>
-        验收: 六文件按 <link> 顺序拼接与原 8–193 行 diff 为空；全量测试全绿；页面外观不变
+- [x] T1  CSS 拆六个文件   file: styles/*.css, index.html
+        spec: 按行号连续切段 tokens(8–9) base(10–22) layout(23–98) forms(99–126)
+              components(127–164) color-picker(165–193)；<style> 删除改六条 <link>
+        验收: 拼接与原 8–193 行逐字节一致 ✅；index.html 2550 → 2368 行、零 <style> ✅；
+              body 段逐字节未动 ✅；页面外观人眼确认待 T2 后与 JS 一并过
 
 ### Wave 3 — deps: T0, T1
 

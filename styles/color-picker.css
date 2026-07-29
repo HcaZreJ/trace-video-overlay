@@ -1,0 +1,29 @@
+  /* ==================== 自定义 Color Picker ==================== */
+  .native-color-hidden{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+  .cp-swatch{display:block;width:28px;height:28px;flex-shrink:0;padding:0;border:1px solid var(--line);border-radius:6px;
+    cursor:pointer;background:#000;transition:.15s}
+  .cp-swatch:hover{border-color:var(--accent)}
+  .cp-popup{position:absolute;z-index:1000;width:260px;padding:12px;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.6);user-select:none}
+  .cp-popup[hidden]{display:none}
+  .cp-sv{position:relative;width:100%;height:160px;border-radius:6px;overflow:hidden;cursor:crosshair;margin-bottom:10px}
+  .cp-sv-canvas{display:block;width:100%;height:100%}
+  .cp-sv-cursor{position:absolute;width:14px;height:14px;border:2px solid #fff;border-radius:50%;
+    box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;transform:translate(-50%,-50%);top:0;left:0}
+  .cp-hue{position:relative;width:100%;height:12px;border-radius:6px;overflow:hidden;cursor:pointer;margin-bottom:10px}
+  .cp-hue-canvas{display:block;width:100%;height:100%}
+  .cp-hue-cursor{position:absolute;top:-2px;bottom:-2px;width:4px;border:2px solid #fff;border-radius:3px;
+    box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none;transform:translateX(-50%);left:0}
+  .cp-tools{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .cp-eyedropper{width:32px;height:32px;flex-shrink:0;border:1px solid var(--line);border-radius:6px;
+    background:#0d0f12;color:var(--fg);cursor:pointer;font-size:14px;line-height:1;padding:0}
+  .cp-eyedropper:hover{background:#2a2f37}
+  .cp-swatch-preview{flex:1;height:32px;border:1px solid var(--line);border-radius:6px;background:#000}
+  .cp-popup .cp-mode-tabs{margin-bottom:10px}
+  .cp-inputs{display:flex;gap:6px}
+  .cp-inputs .cp-input-group{flex:1;display:flex;flex-direction:column;gap:3px;align-items:center;min-width:0}
+  .cp-inputs .cp-input-group label{font-size:12px;color:var(--dim);letter-spacing:.05em}
+  .cp-inputs input{width:100%;padding:6px 6px;border:1px solid var(--line);border-radius:6px;
+    background:#0d0f12;color:var(--fg);font-size:12px;text-align:center}
+  .cp-inputs input.cp-hex-input{text-align:left;padding:6px 8px;font-size:13px}
+  .cp-inputs input.cp-invalid{border-color:#ff453a}
