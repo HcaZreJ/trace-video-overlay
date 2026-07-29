@@ -46,7 +46,7 @@ export function showTrackUndo(removedFile,removedIndex){
   undoBtn.textContent='撤销';
   undoBtn.addEventListener('click',()=>{
     clearTrackUndo();
-    state.trackFiles=[...trackFiles.slice(0,removedIndex),removedFile,...trackFiles.slice(removedIndex)];
+    state.trackFiles=[...state.trackFiles.slice(0,removedIndex),removedFile,...state.trackFiles.slice(removedIndex)];
     recomputeTrack();
   });
   el.appendChild(undoBtn);

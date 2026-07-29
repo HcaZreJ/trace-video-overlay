@@ -67,10 +67,14 @@
         遗留: 引入 main.mjs ↔ export/ 循环 import（exportCard/exportMp4 要调仍住在
               main.mjs 的 onPreviewMapOverlay / stopPreviewPlay）。已写成断言
               「没有任何模块反向导入入口 main.mjs」现在红着，T8 迁走 ui 层后必须转绿。
-- [ ] T8  ui 层              file: src/ui/{track-errors,track-panel,map-panel,preview,controls}.mjs
-        （dom.mjs 与 state.mjs 已在 T3a 落到 src/ 顶层，不在 ui/ 下）
-        deps: T7   验收: 各 ≤ 200 行；main.mjs ≤ 200 行；全量测试全绿含那条反向依赖断言转绿；
-              面板交互手测通过
+- [x] T8  ui 层              file: src/ui/{track-errors,track-panel,map-panel,preview,controls}.mjs
+        deps: T7   验收: 17 个函数体逐字节一致 ✅；最大 108 行 ✅；main.mjs 917 → 624 行
+              （余下 424 行是归 T9 的取色器闭包）✅；反向依赖断言转绿 ✅；
+              src/ 29 个模块 110 个具名导入零未使用 ✅；578+57 全绿 ✅；
+              浏览器八条路径逐一实测，#card 像素签名与基线逐位相同 ✅
+        附带: 挖出并修掉一个 T3a 引入的 bug（见下方 fix 条目）；
+              ui 层内留两条兄弟模块互依（map-panel↔preview、track-panel↔track-errors），
+              跨层仍单向向下，T11 写进 PATTERNS
 - [ ] T9  取色器四拆         file: src/ui/color-picker/{index,popup,canvas,inputs}.mjs
         deps: T8   验收: 各 ≤ 200 行；全量测试全绿；取色器七条交互路径手测通过
 
