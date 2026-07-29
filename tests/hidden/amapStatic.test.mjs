@@ -7,7 +7,7 @@ import {
   buildAmapStaticUrl,
   computeOverlayScale,
   computeBasemapDrawRect,
-} from '../../core.mjs';
+} from '../../src/core/amap.mjs';
 
 // ---------------------------------------------------------------------------
 // 独立于实现的参考公式（用于生成 oracle 期望值，来源：spec 给出的球体墨卡托公式）

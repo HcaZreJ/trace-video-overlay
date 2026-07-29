@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampMp4Duration } from '../../core.mjs';
+import { clampMp4Duration } from '../../src/core/export-params.mjs';
 
 // ---------------------------------------------------------------------------
 // 区间内数值：原样返回，不做步进取整

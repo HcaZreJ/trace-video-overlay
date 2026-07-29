@@ -2,7 +2,13 @@ import { parseFIT } from '../fit.mjs';
 import {
   mercatorX,
   mercatorY,
-  wgs84ToGcj02,
+  smoothTrack,
+  projectTrack,
+  trackDistanceKm,
+  pointAtProgress,
+} from './core/geo.mjs';
+import { wgs84ToGcj02 } from './core/gcj02.mjs';
+import {
   AMAP_STATIC_ZOOM_BIAS,
   computeOverlayScale,
   computeBasemapDrawRect,
@@ -11,23 +17,19 @@ import {
   buildAmapStaticUrl,
   computeAmapUrlForTrack,
   projectTrackOnAmap,
-  smoothTrack,
-  projectTrack,
-  trackDistanceKm,
-  pointAtProgress,
-  concatTrackPoints,
-  reorderTrackFiles,
-  dotGeometry,
-  clampMp4Duration,
-  extractGeoJSONCoords,
-  extractTextCoords,
+} from './core/amap.mjs';
+import {
   parseHex,
   formatHex,
   rgbToHsl,
   hslToRgb,
   rgbToHsv,
   hsvToRgb,
-} from '../core.mjs';
+} from './core/color.mjs';
+import { concatTrackPoints, reorderTrackFiles } from './core/track-files.mjs';
+import { dotGeometry, clampMp4Duration } from './core/export-params.mjs';
+import { extractGeoJSONCoords } from './parse/geojson.mjs';
+import { extractTextCoords } from './parse/csv.mjs';
 
 const $=id=>document.getElementById(id);
 const CARD_SIZE=600;

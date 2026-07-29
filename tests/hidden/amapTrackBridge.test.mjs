@@ -5,10 +5,10 @@ import {
   projectTrackOnAmap,
   computeAmapView,
   buildAmapStaticUrl,
-  wgs84ToGcj02,
-  smoothTrack,
   AMAP_STATIC_ZOOM_BIAS,
-} from '../../core.mjs';
+} from '../../src/core/amap.mjs';
+import { wgs84ToGcj02 } from '../../src/core/gcj02.mjs';
+import { smoothTrack } from '../../src/core/geo.mjs';
 
 // 境外坐标：wgs84ToGcj02 对境外坐标原样返回，方便手工推导期望值（无需额外调用 wgs84ToGcj02）。
 const PARIS = { lng: 2.3522, lat: 48.8566 };

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractGeoJSONCoords } from '../../core.mjs';
+import { extractGeoJSONCoords } from '../../src/parse/geojson.mjs';
 
 /**
  * 断言 actual 是点数组，且逐个与 expected 一致。

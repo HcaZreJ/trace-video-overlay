@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseHex, rgbToHsl } from '../../core.mjs';
+import { parseHex, rgbToHsl } from '../../src/core/color.mjs';
 
 // Visible samples：给实现 agent 用于 sanity-check 的锚定示例，
 // 覆盖 parseHex 主路径、rgbToHsl 手工验算锚定值，以及 parseHex 的 TypeError 分支。

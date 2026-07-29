@@ -6,7 +6,7 @@ import {
   computeAmapView,
   buildAmapStaticUrl,
   AMAP_STATIC_ZOOM_BIAS,
-} from '../../core.mjs';
+} from '../../src/core/amap.mjs';
 
 // 境外坐标（巴黎、悉尼）：wgs84ToGcj02 对境外坐标原样返回，方便手工推导期望值。
 const PARIS = { lng: 2.3522, lat: 48.8566 };

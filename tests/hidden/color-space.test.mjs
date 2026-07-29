@@ -7,7 +7,7 @@ import {
   hslToRgb,
   rgbToHsv,
   hsvToRgb,
-} from '../../core.mjs';
+} from '../../src/core/color.mjs';
 
 // ---------- helpers ----------
 const EPS = 1e-6;

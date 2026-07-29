@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampMp4Duration } from '../../core.mjs';
+import { clampMp4Duration } from '../../src/core/export-params.mjs';
 
 test('clampMp4Duration 区间内数值原样返回', () => {
   assert.equal(clampMp4Duration(6), 6);

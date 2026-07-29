@@ -34,8 +34,11 @@
 
 ### Wave 3–9 — 逐层拆分（依次串行，各自依赖前一个）
 
-- [ ] T3  core 层七拆        file: src/core/{geo,gcj02,amap,metrics,color,track-files,export-params}.mjs
-        deps: T2   验收: 各 ≤ 200 行；core.mjs 删除；全量测试全绿；守恒校验通过
+- [x] T3  core 层拆九个模块  file: src/core/{geo,gcj02,amap,metrics,color,track-files,export-params}.mjs
+                             + src/parse/{geojson,csv}.mjs
+        deps: T2   验收: 33 个导出守恒无重名 ✅；函数体 md5 逐个一致 ✅；最大模块 167 行 ✅；
+              依赖边正好 3 条无环 ✅；core.mjs 已删 ✅；634 个测试全绿 ✅；
+              浏览器实测九模块全部 200 加载 ✅
 - [ ] T4  parse 层           file: src/parse/{index,fit,geojson,csv,xml}.mjs
         deps: T3   验收: 各 ≤ 200 行；fit.mjs 移入；全量测试全绿；守恒校验通过
 - [ ] T5  basemap 层         file: src/basemap/{diagnose,image,fetch}.mjs

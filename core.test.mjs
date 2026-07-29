@@ -1,11 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  mercatorX, mercatorY, smoothTrack, projectTrack,
-  extractGeoJSONCoords, extractTextCoords, trackDistanceKm,
+  mercatorX, mercatorY, smoothTrack, projectTrack, trackDistanceKm,
+} from './src/core/geo.mjs';
+import {
   trackDurationSec, avgSpeedKmh, paceSecPerKm, elevationGainM, formatDuration, formatPace,
-  concatTrackPoints, reorderTrackFiles,
-} from './core.mjs';
+} from './src/core/metrics.mjs';
+import { concatTrackPoints, reorderTrackFiles } from './src/core/track-files.mjs';
+import { extractGeoJSONCoords } from './src/parse/geojson.mjs';
+import { extractTextCoords } from './src/parse/csv.mjs';
 
 // ==================== 运动指标 ====================
 test('trackDurationSec(运动时长): 扣除停顿段', () => {

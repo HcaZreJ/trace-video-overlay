@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pointAtProgress } from '../../core.mjs';
+import { pointAtProgress } from '../../src/core/geo.mjs';
 
 // 直线三点，相邻段长均为 10，total = 20
 const LINE = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 20, y: 0 }];
