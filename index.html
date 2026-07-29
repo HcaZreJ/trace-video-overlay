@@ -5,16 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>轨迹贴图 · 剪辑素材导出</title>
 <style>
-  :root{--bg:#0d0f12;--panel:#171a1f;--line:#262b33;--fg:#e6e9ef;--dim:#8a93a2;--accent:#0a84ff;--accent-strong:#0066cc;--card-max:420px;color-scheme:dark}
+  :root{--bg:#0d0f12;--panel:#171a1f;--line:#262b33;--fg:#e6e9ef;--dim:#8a93a2;--accent:#0a84ff;--accent-strong:#0066cc;--card-max:420px;
+    --sp-label:6px;--sp-field:12px;--sp-group:24px;--sp-step:36px;color-scheme:dark}
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;
     background:var(--bg);color:var(--fg);line-height:1.5}
   header{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  header h1{margin:0;font-size:18px;font-weight:600}
-  header p{margin:4px 0 0;font-size:13px;color:var(--dim)}
-  #loadSample{flex-shrink:0;padding:8px 14px;border:1px solid var(--line);border-radius:8px;
-    background:#2a2f37;color:var(--fg);font-size:13px;cursor:pointer;transition:.15s}
-  #loadSample:hover{background:var(--accent-strong);color:#fff}
+  header h1{margin:0;font-size:17px;font-weight:600}
+  header p{margin:4px 0 0;font-size:12px;color:var(--dim)}
+  /* 示例轨迹入口：drop 区正下方的链接式按钮；hidden 表示示例文件不可访问，has-track 表示已有轨迹 */
+  #loadSample{display:block;margin:8px auto 0;padding:4px;border:none;background:none;
+    color:var(--accent);font-size:12px;cursor:pointer;transition:.15s}
+  #loadSample:hover{filter:brightness(1.15)}
+  #loadSample[hidden],body.has-track #loadSample{display:none}
   button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible,[tabindex]:focus-visible,summary:focus-visible{
     outline:2px solid var(--accent);outline-offset:2px}
   .workspace{display:grid;grid-template-columns:1fr 400px;gap:32px;max-width:1520px;margin:0 auto;padding:24px 40px;align-items:start}
@@ -22,13 +25,20 @@
   .drop{border:2px dashed var(--line);border-radius:14px;padding:16px;text-align:center;
     cursor:pointer;transition:.15s;background:var(--panel)}
   .drop:hover,.drop.over{border-color:var(--accent);background:#12161c}
-  .drop strong{color:var(--accent)}
+  .drop > div{font-size:13px;color:var(--fg)}
+  .drop strong{color:var(--fg);font-weight:600}
   .drop small{display:block;color:var(--dim);margin-top:6px;font-size:12px}
   .info{margin:14px 0;font-size:13px;color:var(--dim);text-align:center;align-self:stretch}
   .info b{color:var(--fg)}
-  .stage{display:flex;flex-direction:column;gap:20px;align-items:center;position:sticky;top:50vh;transform:translateY(-50%)}
+  /* 舞台在视口内垂直居中：自身撑满一屏高再居中内容，不依赖右列的高度
+     （空状态下右列收起后只有几百 px，若靠兄弟列撑高会把卡片拉出视口） */
+  .stage{display:flex;flex-direction:column;gap:20px;align-items:center;justify-content:center;
+    position:sticky;top:0;min-height:calc(100vh - 48px)}
+  /* 移动端与 iPad 的浏览器工具栏会让 100vh 大于可视高度，支持 dvh 时用它精确表达 */
+  @supports (height:100dvh){.stage{min-height:calc(100dvh - 48px)}}
   @media(max-height:820px){:root{--card-max:320px}}
-  @media(max-width:760px){.stage{position:sticky;top:0;transform:none;z-index:10;background:var(--bg);padding:12px 0}}
+  @media(max-width:760px){.stage{position:sticky;top:0;min-height:0;justify-content:flex-start;
+    z-index:10;background:var(--bg);padding:12px 0}}
   .cardbox{width:min(100%,var(--card-max));aspect-ratio:1;margin:0 auto;border-radius:12px;overflow:hidden;
     background-image:
       linear-gradient(45deg,#2a2f37 25%,transparent 25%),
@@ -39,67 +49,87 @@
     background-color:#20242b}
   @media(max-width:760px){.cardbox{width:min(32vh,100%)}}
   .cardbox.over{box-shadow:0 0 0 3px var(--accent) inset}
+  body:not(.has-track) .cardbox{cursor:pointer}
   canvas#card{display:block;width:100%;height:100%}
   .scrub{width:min(100%,var(--card-max))}
   .scrub label{display:block;font-size:12px;color:var(--dim);margin-bottom:5px}
   button.scrub-play{width:36px;height:36px;flex-shrink:0;border:none;border-radius:8px;
     background:var(--line);color:var(--fg);cursor:pointer;font-size:14px;transition:.15s}
-  button.scrub-play:hover{background:var(--accent-strong);color:#fff}
+  button.scrub-play:hover{background:#2a2f37}
   @media(max-width:760px){button.scrub-play{width:40px;height:40px}}
-  .dotwrap{display:flex;align-items:center;gap:12px;color:var(--dim);font-size:12px}
-  .dotbox{width:72px;height:72px;border-radius:8px;
+  /* 定位点内联小预览：② 样式「定位点」子组标题行右侧的 32px 棋盘格盒子 */
+  .dotbox{width:32px;height:32px;border-radius:6px;flex-shrink:0;
     background-image:
       linear-gradient(45deg,#2a2f37 25%,transparent 25%),
       linear-gradient(-45deg,#2a2f37 25%,transparent 25%),
       linear-gradient(45deg,transparent 75%,#2a2f37 75%),
       linear-gradient(-45deg,transparent 75%,#2a2f37 75%);
-    background-size:12px 12px;background-position:0 0,0 6px,6px -6px,-6px 0;background-color:#20242b;
-    min-width:48px;min-height:48px;
+    background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0;background-color:#20242b;
     display:flex;align-items:center;justify-content:center}
-  canvas#dot{display:block;width:56px;height:56px}
-  .controls{display:flex;flex-direction:column;gap:20px}
-  .section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
-  .section h2{margin:0 0 12px;font-size:13px;color:var(--dim);font-weight:600;letter-spacing:.04em}
-  .subhead{margin:20px 0 12px;padding-top:16px;border-top:1px solid var(--line);
-    font-size:12px;color:var(--dim);font-weight:600}
-  .field{margin-bottom:14px}
-  .field label{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:5px}
+  canvas#dot{display:block}
+  .controls{display:flex;flex-direction:column;gap:calc(var(--sp-step)/2)}
+  .step{position:relative;min-width:0}
+  .step+.step{padding-top:calc(var(--sp-step)/2);border-top:1px solid var(--line)}
+  .step h2{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+    margin:0 0 var(--sp-field);font-size:14px;color:var(--fg);font-weight:600}
+  .subhead{margin:var(--sp-group) 0 var(--sp-field);font-size:13px;color:var(--fg);font-weight:600}
+  .subhead.with-preview{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .step h2+.subhead{margin-top:0}
+  .map-subpanel{margin:0 0 var(--sp-field);padding-left:12px;padding-top:12px;padding-right:12px;padding-bottom:4px;
+    background:var(--panel);border-left:2px solid var(--line);border-radius:0 8px 8px 0}
+  .field{margin-bottom:var(--sp-field)}
+  .field label{display:flex;justify-content:space-between;font-size:13px;color:var(--fg);margin-bottom:var(--sp-label)}
   .field label span{color:var(--fg)}
-  .field small{display:block;color:var(--dim);margin-top:4px;font-size:11px}
+  .field small{display:block;color:var(--dim);margin-top:4px;font-size:12px}
   .field small a{color:var(--accent)}
+  .color-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .color-row > label{display:flex;font-size:13px;color:var(--fg);margin-bottom:0;flex:0 1 auto}
+  .color-ctl{position:relative;display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .color-pair{display:flex;gap:var(--sp-field);margin-bottom:var(--sp-field)}
+  .color-pair .color-row{flex:1;min-width:0}
+  .color-hex,[data-hex-for]{font-size:12px;color:var(--dim);letter-spacing:.04em;font-variant-numeric:tabular-nums}
   .gate-hint{display:block;color:var(--dim);font-size:12px;margin:8px 0 14px}
-  .needs-track{opacity:.45}
-  .export-actions.needs-track{opacity:1}
-  .export-actions.needs-track .export-actions-buttons,
-  .export-actions.needs-track #exportStatus,
-  .export-actions.needs-track #mp4ProgressWrap{opacity:.45}
+  /* gate 提示贴在区标题行右端。它是 .step 的直接子节点而不是 h2 的孩子：h2 在收起态带
+     opacity:.45，作为孩子会被一起压到 2.2:1 对比度，读不清 */
+  .step > .gate-hint{position:absolute;top:0;right:0;margin:0;line-height:21px}
+  /* 未载入轨迹：②③ 只剩置灰的区标题行，吸底动作条整条不渲染 */
+  .needs-track .step-body{display:none}
+  .step.needs-track > h2{opacity:.45}
+  .export-actions.needs-track{display:none}
   input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
     background:#0d0f12;color:var(--fg);font-size:13px}
   input[type=text]:disabled{opacity:.4;cursor:not-allowed}
   input[type=range]{width:100%}
-  input[type=color]{width:100%;height:32px;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer;padding:2px}
+  select{width:100%;height:32px;padding:0 30px 0 10px;border:1px solid var(--line);border-radius:6px;
+    background-color:#0d0f12;color:var(--fg);font-size:13px;line-height:1;cursor:pointer;
+    appearance:none;-webkit-appearance:none;-moz-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a93a2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center}
+  select:disabled{opacity:.4;cursor:not-allowed}
   .fieldrow{display:flex;align-items:center;gap:10px}
   .fieldrow input[type=range]{flex:1;width:auto}
-  input.val{width:64px;padding:8px 6px;border:1px solid var(--line);border-radius:6px;
+  input.val{width:64px;height:32px;padding:0 6px;border:1px solid var(--line);border-radius:6px;
     background:#0d0f12;color:var(--fg);font-size:13px;text-align:right}
   input.val:disabled{opacity:.4;cursor:not-allowed}
+  input.val,#info,#mp4ProgressV,.file-meta{font-variant-numeric:tabular-nums}
   .row{display:flex;gap:10px}
   .row .field{flex:1}
-  .check{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px}
-  .segmented{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:14px}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:var(--sp-field)}
+  .segmented{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:var(--sp-field)}
   .seg-opt{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:9px 0;
-    font-size:13px;color:var(--dim);cursor:pointer;background:#0d0f12;transition:.15s;user-select:none}
+    font-size:13px;color:var(--fg);cursor:pointer;background:#0d0f12;transition:.15s;user-select:none}
   .seg-opt:not(:last-child){border-right:1px solid var(--line)}
   .seg-opt input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
-  .seg-opt.active{background:var(--accent-strong);color:#fff}
+  .seg-opt.active{background:#39404d;color:#fff}
   .seg-opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+  .seg-opt:has(input:disabled){opacity:.45;cursor:not-allowed}
   @media(max-width:760px){.check{padding:10px 0}.seg-opt{padding:12px 0}}
   .keyhelp{margin-top:8px;font-size:12px;color:var(--dim)}
-  .keyhelp summary{cursor:pointer;color:var(--accent)}
+  .keyhelp summary{cursor:pointer;color:var(--fg)}
   .keyhelp ol{margin:8px 0 4px;padding-left:18px}
   .keyhelp li{margin-bottom:4px}
   .keyhelp small{display:block;margin-top:6px}
-  .privacy-note{display:block;color:var(--dim);font-size:11px;margin:10px 0 0}
+  .privacy-note{display:block;color:var(--dim);font-size:12px;margin:10px 0 0}
   .btns{display:flex;flex-direction:column;gap:10px;margin-top:8px}
   button.exp{padding:11px;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;
     background:var(--accent-strong);color:#fff;transition:.15s}
@@ -113,12 +143,12 @@
   .export-actions-buttons{display:flex;gap:10px}
   .export-actions-buttons button{flex:1;margin:0;white-space:nowrap;padding-left:8px;padding-right:8px}
   @media(max-width:760px){.export-actions-buttons{flex-wrap:wrap}.export-actions-buttons button{flex:1 1 45%}}
-  #exportStatus .status-btn{display:inline-block;width:auto;margin:8px 8px 0 0;padding:5px 10px;
+  .status-btn{display:inline-block;width:auto;margin:8px 8px 0 0;padding:5px 10px;
     font-size:12px;border:1px solid var(--line);border-radius:6px;background:#2a2f37;color:var(--fg);cursor:pointer}
-  #exportStatus .status-btn:hover{background:var(--accent-strong);color:#fff}
+  .status-btn:hover{filter:brightness(1.15)}
   .hint{font-size:12px;color:var(--dim);margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
   .hint b{color:var(--fg)}
-  .file-list{margin:0 0 14px}
+  .file-list{margin:0 0 var(--sp-field)}
   .file-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel);
     border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:13px}
   .file-idx{width:18px;color:var(--dim);text-align:center;flex-shrink:0}
@@ -127,15 +157,16 @@
   .file-btns{display:flex;gap:4px;flex-shrink:0}
   .file-btns button{width:32px;height:32px;border:none;border-radius:6px;background:var(--line);
     color:var(--fg);cursor:pointer;font-size:13px;line-height:1;transition:.15s}
-  .file-btns button:not(:disabled):hover{background:var(--accent-strong);color:#fff}
+  .file-btns button:not(:disabled):hover{background:#2a2f37}
+  .file-btns button[data-act="del"]:not(:disabled):hover{background:#ff453a;color:#fff}
   .file-btns button:disabled{opacity:.35;cursor:not-allowed}
   @media(max-width:760px){.file-btns button{width:40px;height:40px}}
   input[type=file]{display:none}
   /* ==================== 自定义 Color Picker ==================== */
   .native-color-hidden{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
-  .cp-swatch{display:block;width:100%;height:32px;padding:0;border:1px solid var(--line);border-radius:6px;
+  .cp-swatch{display:block;width:28px;height:28px;flex-shrink:0;padding:0;border:1px solid var(--line);border-radius:6px;
     cursor:pointer;background:#000;transition:.15s}
-  .cp-swatch:hover{border-color:var(--accent-strong)}
+  .cp-swatch:hover{border-color:var(--accent)}
   .cp-popup{position:absolute;z-index:1000;width:260px;padding:12px;background:var(--panel);
     border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.6);user-select:none}
   .cp-popup[hidden]{display:none}
@@ -150,12 +181,12 @@
   .cp-tools{display:flex;align-items:center;gap:8px;margin-bottom:10px}
   .cp-eyedropper{width:32px;height:32px;flex-shrink:0;border:1px solid var(--line);border-radius:6px;
     background:#0d0f12;color:var(--fg);cursor:pointer;font-size:14px;line-height:1;padding:0}
-  .cp-eyedropper:hover{background:var(--accent-strong);color:#fff}
+  .cp-eyedropper:hover{background:#2a2f37}
   .cp-swatch-preview{flex:1;height:32px;border:1px solid var(--line);border-radius:6px;background:#000}
   .cp-popup .cp-mode-tabs{margin-bottom:10px}
   .cp-inputs{display:flex;gap:6px}
   .cp-inputs .cp-input-group{flex:1;display:flex;flex-direction:column;gap:3px;align-items:center;min-width:0}
-  .cp-inputs .cp-input-group label{font-size:10px;color:var(--dim);letter-spacing:.05em}
+  .cp-inputs .cp-input-group label{font-size:12px;color:var(--dim);letter-spacing:.05em}
   .cp-inputs input{width:100%;padding:6px 6px;border:1px solid var(--line);border-radius:6px;
     background:#0d0f12;color:var(--fg);font-size:12px;text-align:center}
   .cp-inputs input.cp-hex-input{text-align:left;padding:6px 8px;font-size:13px}
@@ -166,9 +197,8 @@
 <header>
   <div>
     <h1>轨迹贴图 · 剪辑素材导出</h1>
-    <p>把 GPX / KML / TCX / FIT / GeoJSON / CSV 骑行轨迹导出成透明 PNG 或 MP4 动画，可叠加地图底图，放进剪映当角落贴图</p>
+    <p>把骑行轨迹导出成剪映可用的透明 PNG 贴图和 MP4 动画，文件全程在本地处理</p>
   </div>
-  <button type="button" id="loadSample" hidden>试试示例轨迹</button>
 </header>
 <div class="workspace">
   <div class="stage">
@@ -181,54 +211,41 @@
       </div>
     </div>
     <div class="info" id="info" aria-live="polite">尚未载入轨迹</div>
-    <div class="dotwrap">
-      <div class="dotbox"><canvas id="dot" width="128" height="128" role="img" aria-label="定位点预览"></canvas></div>
-      <div>单独的定位点（用底部「导出定位点 PNG」按钮导出，也可右键此图另存）<br>放进剪映后用位置关键帧让它沿线路移动</div>
-    </div>
   </div>
 
   <div class="controls">
-    <div class="section">
-      <h2>轨迹</h2>
+    <div class="step">
+      <h2>① 轨迹</h2>
+      <div class="step-body">
       <div class="drop" id="drop" role="button" tabindex="0" aria-label="选择或拖入轨迹文件">
-        <div>拖入轨迹文件（可多选，按顺序首尾相连），或 <strong>点击选择</strong></div>
-        <small>支持 .gpx / .kml / .tcx / .fit / .geojson / .csv — 全程本地处理，不上传</small>
+        <div>拖入轨迹文件，或<strong>点击选择</strong>。可以一次选多个，多条轨迹会按列表顺序连成一条</div>
+        <small>支持 .gpx / .kml / .tcx / .fit / .geojson / .csv；文件全程在本地处理，不会上传</small>
       </div>
-      <small class="gate-hint" id="trackGateHint">载入轨迹后，下方样式与导出才会生效</small>
+      <button type="button" id="loadSample" hidden>试试示例轨迹</button>
       <input type="file" id="file" accept=".gpx,.kml,.tcx,.xml,.fit,.geojson,.json,.csv,.txt" multiple>
       <div class="file-list" id="fileList"></div>
       <div class="hint" id="trackErrors" aria-live="polite" style="display:none"></div>
       <div class="hint" id="trackUndo" aria-live="polite" style="display:none"></div>
+      </div>
     </div>
 
-    <div class="section needs-track" data-gate>
-      <h2>背景与卡片</h2>
+    <div class="step needs-track" data-gate>
+      <h2>② 样式</h2>
+      <small class="gate-hint" id="trackGateHint">载入轨迹后可用</small>
+      <div class="step-body">
+
+      <div class="subhead">卡片</div>
       <div class="segmented" id="bgModeSegmented" role="radiogroup" aria-label="卡片背景">
         <label class="seg-opt" id="bgModeSolidLabel"><input type="radio" name="bgMode" id="bgModeSolid" value="solid" checked> 纯色</label>
-        <label class="seg-opt" id="bgModeMapLabel"><input type="radio" name="bgMode" id="bgModeMap" value="map"> 地图底图（需免费 key）</label>
+        <label class="seg-opt" id="bgModeMapLabel"><input type="radio" name="bgMode" id="bgModeMap" value="map"> 地图底图</label>
       </div>
       <input type="checkbox" id="mapOverlay" hidden>
 
-      <div class="field">
-        <label for="bgColor">底色</label>
-        <input type="color" id="bgColor" value="#000000">
-      </div>
-      <div class="field">
-        <label for="bgOpacity">底色不透明度（%）</label>
-        <div class="fieldrow">
-          <input type="range" id="bgOpacity" min="0" max="100" value="35">
-          <input type="number" id="bgOpacityV" class="val" min="0" max="100" step="1" value="35" aria-label="底色透明度数值输入">
-        </div>
-        <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">
-          纯色模式下是卡片底；地图底图模式下垫在底图之下，取景缩放拉小露出的边界处可见。PNG 导出保留此处的透明度
-        </small>
-      </div>
-
-      <div id="bgMapFields" style="display:none">
+      <div id="bgMapFields" class="map-subpanel" style="display:none">
         <div class="field">
           <label for="amapKey">高德 Web 服务 API Key</label>
           <input type="text" id="amapKey" placeholder="高德 Web 服务 API Key" disabled>
-          <small><a href="https://console.amap.com/dev/key/app" target="_blank" rel="noopener">→ 前往高德开放平台申请 key</a></small>
+          <small><a href="https://console.amap.com/dev/key/app" target="_blank" rel="noopener">前往高德开放平台申请 key（免费）</a></small>
           <details class="keyhelp">
             <summary>怎么申请（免费）</summary>
             <ol>
@@ -243,8 +260,8 @@
         <div class="field">
           <label>底图样式</label>
           <div class="row">
-            <label class="check"><input type="radio" name="mapOverlayMode" value="none" checked disabled> 地图铺满</label>
-            <label class="check"><input type="radio" name="mapOverlayMode" value="mask" disabled> 地图 + 黑蒙层</label>
+            <label class="check"><input type="radio" name="mapOverlayMode" value="none" checked disabled> 铺满</label>
+            <label class="check"><input type="radio" name="mapOverlayMode" value="mask" disabled> 加黑蒙层</label>
           </div>
         </div>
         <div class="field" id="mapMaskOpacityField" style="display:none">
@@ -260,17 +277,32 @@
             <input type="range" id="mapViewScale" min="0.5" max="1.5" value="1" step="0.05" disabled>
             <input type="number" id="mapViewScaleV" class="val" min="0.5" max="1.5" step="0.05" value="1.00" disabled aria-label="取景缩放数值输入">
           </div>
-          <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">
-            调整轨迹在卡片中的占比，底图与轨迹同步缩放、贴合关系保持；拉小可能露出底图边界（边界外为上方『底色』）。
-          </small>
+          <small>调整轨迹在卡片中所占的比例；数值调小后底图会缩小，露出的边缘显示「底色」里设置的颜色</small>
         </div>
         <div class="btns">
           <button class="exp sec" id="mapPreview" disabled>重新拉取底图</button>
         </div>
-        <small class="privacy-note">开启后轨迹范围坐标会发送给高德以获取底图，其余处理仍全部在本地；key 仅明文保存在你浏览器本地</small>
         <div class="hint" id="mapOverlayStatus" aria-live="polite" style="display:none"></div>
+        <small class="privacy-note">开启地图底图后，轨迹范围的坐标会发送给高德用于获取底图，其余处理仍然全部在本地完成；key 只保存在你自己的浏览器里</small>
       </div>
 
+      <div class="field">
+        <div class="color-row">
+          <label for="bgColor">底色</label>
+          <span class="color-ctl">
+            <input type="color" id="bgColor" value="#000000">
+            <span class="color-hex" data-hex-for="bgColor">#000000</span>
+          </span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="bgOpacity">不透明度（%）</label>
+        <div class="fieldrow">
+          <input type="range" id="bgOpacity" min="0" max="100" value="35">
+          <input type="number" id="bgOpacityV" class="val" min="0" max="100" step="1" value="35" aria-label="底色透明度数值输入">
+        </div>
+        <small>导出的 PNG 会保留这里设置的透明度</small>
+      </div>
       <div class="field">
         <label for="radius">圆角（px）</label>
         <div class="fieldrow">
@@ -285,13 +317,16 @@
           <input type="number" id="padV" class="val" min="20" max="150" step="1" value="70" aria-label="内边距数值输入">
         </div>
       </div>
-    </div>
 
-    <div class="section needs-track" data-gate>
-      <h2>线路与标记</h2>
+      <div class="subhead">线路</div>
       <div class="field">
-        <label for="lineColor">线路颜色</label>
-        <input type="color" id="lineColor" value="#ffd60a">
+        <div class="color-row">
+          <label for="lineColor">颜色</label>
+          <span class="color-ctl">
+            <input type="color" id="lineColor" value="#ffd60a">
+            <span class="color-hex" data-hex-for="lineColor">#FFD60A</span>
+          </span>
+        </div>
       </div>
       <div class="field">
         <label for="lineWidth">线宽（px）</label>
@@ -301,30 +336,40 @@
         </div>
       </div>
 
-      <div class="subhead">标记</div>
       <label class="check"><input type="checkbox" id="showMarkers" checked> 显示起点 / 终点</label>
-      <div class="row">
-        <div class="field">
+      <div class="color-pair">
+        <div class="color-row">
           <label for="startColor">起点</label>
-          <input type="color" id="startColor" value="#34c759">
+          <span class="color-ctl">
+            <input type="color" id="startColor" value="#34c759">
+            <span class="color-hex" data-hex-for="startColor">#34C759</span>
+          </span>
         </div>
-        <div class="field">
+        <div class="color-row">
           <label for="endColor">终点</label>
-          <input type="color" id="endColor" value="#ff453a">
+          <span class="color-ctl">
+            <input type="color" id="endColor" value="#ff453a">
+            <span class="color-hex" data-hex-for="endColor">#FF453A</span>
+          </span>
         </div>
       </div>
       <div class="field">
-        <label for="markerSize">大小（px）</label>
+        <label for="markerSize">标记大小（px）</label>
         <div class="fieldrow">
           <input type="range" id="markerSize" min="8" max="60" value="20">
           <input type="number" id="markerSizeV" class="val" min="8" max="60" step="1" value="20" aria-label="标记大小数值输入">
         </div>
       </div>
 
-      <div class="subhead">定位点</div>
+      <div class="subhead with-preview">定位点<span class="dotbox"><canvas id="dot" width="128" height="128" role="img" aria-label="定位点预览"></canvas></span></div>
       <div class="field">
-        <label for="dotColor">颜色</label>
-        <input type="color" id="dotColor" value="#0a84ff">
+        <div class="color-row">
+          <label for="dotColor">颜色</label>
+          <span class="color-ctl">
+            <input type="color" id="dotColor" value="#0a84ff">
+            <span class="color-hex" data-hex-for="dotColor">#0A84FF</span>
+          </span>
+        </div>
       </div>
       <div class="field">
         <label for="dotSize">大小（px）</label>
@@ -332,14 +377,16 @@
           <input type="range" id="dotSize" min="8" max="160" value="58">
           <input type="number" id="dotSizeV" class="val" min="8" max="160" step="1" value="58" aria-label="定位点大小数值输入">
         </div>
-        <small>定位点只出现在预览与 MP4 里；卡片 PNG 不含定位点，用「导出定位点 PNG」单独出图</small>
+        <small>定位点是沿线路移动的圆点，会出现在预览和 MP4 动画里；轨迹卡片 PNG 不包含它，用「导出定位点 PNG」单独导出</small>
+      </div>
       </div>
     </div>
 
-    <div class="section needs-track" data-gate>
-      <h2>导出</h2>
+    <div class="step needs-track" data-gate>
+      <h2>③ 导出</h2>
+      <div class="step-body">
       <div class="field">
-        <label for="exportRes">导出分辨率（PNG 与 MP4 共用）</label>
+        <label for="exportRes">分辨率（PNG 与 MP4 共用）</label>
         <select id="exportRes">
           <option value="720">720 × 720</option>
           <option value="1080" selected>1080 × 1080</option>
@@ -347,45 +394,65 @@
         </select>
       </div>
 
-      <div class="subhead">MP4 动画</div>
-      <small class="gate-hint" id="mp4UnsupportedHint" style="display:none">当前浏览器不支持视频编码，导出 MP4 需要新版 Chrome / Edge / Safari</small>
-      <div class="row">
+      <div class="segmented" id="exportKindSegmented" role="radiogroup" aria-label="导出产物">
+        <label class="seg-opt" id="exportKindPngLabel"><input type="radio" name="exportKind" id="exportKindPng" value="png" checked> 贴图 PNG</label>
+        <label class="seg-opt" id="exportKindMp4Label"><input type="radio" name="exportKind" id="exportKindMp4" value="mp4"> 动画 MP4</label>
+      </div>
+
+      <div id="exportPngFields">
         <div class="field">
-          <label for="mp4Duration">时长（秒）</label>
-          <input type="number" id="mp4Duration" class="val" min="1" max="600" step="0.5" value="6">
-          <small style="display:block;color:var(--dim);font-size:11px;margin-top:4px">上限 600 秒；文件大小约与时长成正比（1080p 约 90 MB/分钟）</small>
-        </div>
-        <div class="field">
-          <label for="mp4Fps">帧率</label>
-          <select id="mp4Fps">
-            <option value="24">24</option>
-            <option value="30" selected>30</option>
-            <option value="60">60</option>
-          </select>
+          <small>会导出两张图：轨迹卡片和定位点。在剪映里把卡片当作画中画放在角落；把定位点也拖进去，沿线路打几个位置关键帧，它就会跟着线路移动</small>
         </div>
       </div>
-      <div class="row">
-        <div class="field">
-          <label for="mp4BgMode">MP4 画布</label>
-          <select id="mp4BgMode">
-            <option value="card" selected>卡片</option>
-            <option value="green">绿幕</option>
-          </select>
+
+      <div id="exportMp4Fields" style="display:none">
+        <small class="gate-hint" id="mp4UnsupportedHint" style="display:none">当前浏览器不支持视频编码，导出 MP4 需要新版 Chrome / Edge / Safari</small>
+        <div class="row">
+          <div class="field">
+            <label for="mp4Duration">时长（秒）</label>
+            <input type="number" id="mp4Duration" class="val" min="1" max="600" step="0.5" value="6">
+            <small>最长 600 秒；1080p 的文件大小约为每分钟 90 MB</small>
+          </div>
+          <div class="field">
+            <label for="mp4Fps">帧率</label>
+            <select id="mp4Fps">
+              <option value="24">24</option>
+              <option value="30" selected>30</option>
+              <option value="60">60</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="mp4BgMode">画布</label>
+            <select id="mp4BgMode">
+              <option value="card" selected>卡片</option>
+              <option value="green">绿幕</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field" id="mp4PageColorField">
+            <div class="color-row">
+              <label for="mp4PageColor">画布颜色（卡片圆角以外的部分）</label>
+              <span class="color-ctl">
+                <input type="color" id="mp4PageColor" value="#0d0f12">
+                <span class="color-hex" data-hex-for="mp4PageColor">#0D0F12</span>
+              </span>
+            </div>
+            <small>卡片本体的底色仍然用「底色」里的设置</small>
+          </div>
+          <div class="field" id="mp4GreenColorField" style="display:none">
+            <div class="color-row">
+              <label for="mp4GreenColor">绿幕色</label>
+              <span class="color-ctl">
+                <input type="color" id="mp4GreenColor" value="#00b140">
+                <span class="color-hex" data-hex-for="mp4GreenColor">#00B140</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="row">
-        <div class="field" id="mp4PageColorField">
-          <label for="mp4PageColor">画布颜色（卡片圆角外）</label>
-          <input type="color" id="mp4PageColor" value="#0d0f12">
-          <small>卡片本体仍用上方『底色』；画布是卡片四角外的部分</small>
-        </div>
-        <div class="field" id="mp4GreenColorField" style="display:none">
-          <label for="mp4GreenColor">绿幕色</label>
-          <input type="color" id="mp4GreenColor" value="#00b140">
-        </div>
-      </div>
-      <div class="hint">
-        <b>剪映用法：</b>地图卡片当画中画放角落；把定位点也拖进去，沿线路打几个位置关键帧即可让它移动。不想动就只放地图卡片。
       </div>
     </div>
 
@@ -398,7 +465,7 @@
       <div class="export-actions-buttons">
         <button class="exp" id="expCard" disabled>导出卡片 PNG</button>
         <button class="exp sec" id="expDot" disabled>导出定位点 PNG</button>
-        <button class="exp sec" id="expMp4" disabled>导出 MP4</button>
+        <button class="exp" id="expMp4" disabled>导出 MP4</button>
       </div>
     </div>
   </div>
@@ -1169,10 +1236,10 @@ function renderCard(canvas,size,opts={}){
     ctx.textAlign='center';
     ctx.textBaseline='middle';
     ctx.font=`${Math.round(20*emptyScale)}px -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif`;
-    ctx.fillText('拖入轨迹文件开始',size/2,size/2-14*emptyScale);
+    ctx.fillText('拖入轨迹文件，或点击这里选择文件',size/2,size/2-14*emptyScale);
     if($('loadSample')&&!$('loadSample').hidden){
       ctx.font=`${Math.round(15*emptyScale)}px -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif`;
-      ctx.fillText('或点上方「试试示例轨迹」',size/2,size/2+14*emptyScale);
+      ctx.fillText('也可以先载入示例轨迹',size/2,size/2+14*emptyScale);
     }
     ctx.restore();
     return;
@@ -1327,9 +1394,8 @@ function render(){
   }
   const dotExportPx = Math.round(+$('dotSize').value * (+$('exportRes').value||1080) / CARD_SIZE);
   renderDot($('dot'), dotExportPx);
-  const dispScale = ($('card').clientWidth||360) / CARD_SIZE;
-  const dotFullRatio = dotGeometry(dotExportPx).full / dotExportPx; // full/彩色核直径 之比，保证显示比例与卡片预览一致
-  const dispPx = Math.max(1, Math.round(+$('dotSize').value * dispScale * dotFullRatio));
+  // 内联小预览：把 dotSize 的取值域 8–160 线性映射进 32px 棋盘格盒子（6–28px），随滑杆实时变化
+  const dispPx = Math.round(6 + (+$('dotSize').value - 8) / (160 - 8) * (28 - 6));
   $('dot').style.width = $('dot').style.height = dispPx + 'px';
 }
 
@@ -1456,6 +1522,24 @@ function updateMapModeFieldsUI(){
 $('mapPreview').addEventListener('click', onPreviewMapOverlay);
 
 /* ==================== 导出 ==================== */
+// 产物切换：贴图 PNG = 卡片 + 定位点两张图，动画 MP4 = 一段动画。
+// 这里只管参数面板与吸底条按钮的显隐；按钮的 disabled 由轨迹状态与 MP4 导出互斥逻辑各自维护，
+// 隐藏的按钮保持它原本的 disabled 值不变。
+function updateExportKindUI(){
+  const mp4Kind = $('exportKindMp4').checked;
+  $('exportKindPngLabel').classList.toggle('active', !mp4Kind);
+  $('exportKindMp4Label').classList.toggle('active', mp4Kind);
+  $('exportPngFields').style.display = mp4Kind ? 'none' : '';
+  $('exportMp4Fields').style.display = mp4Kind ? '' : 'none';
+  $('expCard').style.display = mp4Kind ? 'none' : '';
+  $('expDot').style.display = mp4Kind ? 'none' : '';
+  $('expMp4').style.display = mp4Kind ? '' : 'none';
+  try { localStorage.setItem('exportKind', mp4Kind ? 'mp4' : 'png'); } catch(_){ /* storage 被禁用：偏好不持久化，界面照常 */ }
+}
+// 导出进行中锁住产物切换：承载「取消导出」的按钮就是 #expMp4，切走会让用户失去唯一的取消入口。
+function setExportKindLocked(locked){
+  document.querySelectorAll('input[name=exportKind]').forEach(el => el.disabled = locked);
+}
 function download(canvas,filename,onDone){
   canvas.toBlob(blob=>{
     const a=document.createElement('a');
@@ -1517,7 +1601,7 @@ async function exportCard(){
   } finally {
     window.mapOverlayState = savedOverlayState;
   }
-  download(c,'轨迹卡片.png',()=>setExportStatus('已下载「轨迹卡片.png」（不含定位点，可用「导出定位点 PNG」单独导出）','success'));
+  download(c,'轨迹卡片.png',()=>setExportStatus('已下载「轨迹卡片.png」','success'));
 }
 function exportDot(){
   if(!trackPoints) return;
@@ -1637,6 +1721,7 @@ async function exportMp4(){
   btn.textContent = '取消导出';
   $('expCard').disabled = true;
   $('expDot').disabled = true;
+  setExportKindLocked(true);
   setMp4BeforeUnloadGuard(true);
   setExportStatus('', 'clear');
   $('mp4ProgressWrap').style.display='';
@@ -1701,6 +1786,7 @@ async function exportMp4(){
     btn.textContent = '导出 MP4';
     $('expCard').disabled = !trackPoints;
     $('expDot').disabled = !trackPoints;
+    setExportKindLocked(false);
     $('mp4ProgressWrap').style.display='none';
     setMp4BeforeUnloadGuard(false);
   }
@@ -1757,9 +1843,14 @@ function showTrackUndo(removedFile,removedIndex){
   trackUndoTimer=setTimeout(clearTrackUndo,5000);
 }
 function setTrackGate(hasTrack){
+  // body.has-track 供舞台外的元素（示例轨迹链接、空状态画布光标）按轨迹状态改样式
+  document.body.classList.toggle('has-track',hasTrack);
   document.querySelectorAll('[data-gate]').forEach(el=>{
     el.classList.toggle('needs-track',!hasTrack);
-    el.inert=!hasTrack;
+    // inert 下沉到 .step-body：整块设 inert 会把区标题和「载入轨迹后可用」也移出无障碍树，
+    // 而空状态下这两句正是解释「为什么这里是空的」的唯一文字
+    const inertTarget=el.querySelector(':scope > .step-body')||el;
+    inertTarget.inert=!hasTrack;
     if(hasTrack) el.removeAttribute('aria-disabled'); else el.setAttribute('aria-disabled','true');
   });
   const hint=$('trackGateHint');
@@ -1859,6 +1950,8 @@ $('file').onchange=e=>{ if(e.target.files.length) loadTrackFiles(Array.from(e.ta
 // 页面级拖放防御：dragover/drop 一律 preventDefault，避免拖到 #drop 以外（尤其预览画布）时
 // 浏览器直接打开文件、丢光页面状态；drop 一律收敛到这一份逻辑处理，不与 #drop 重复触发。
 const cardbox=document.querySelector('.cardbox');
+// 空状态下画布本身就是第二个「载入轨迹」入口；有轨迹后画布只是预览，点击不再选文件
+cardbox.addEventListener('click',()=>{ if(trackPoints) return; $('file').click(); });
 const setDropHighlight=on=>{ drop.classList.toggle('over',on); cardbox.classList.toggle('over',on); };
 const onDragHover=e=>{ e.preventDefault(); setDropHighlight(true); };
 const onDragLeave=e=>{ e.preventDefault(); setDropHighlight(false); };
@@ -1903,6 +1996,22 @@ bind('mapMaskOpacity','mapMaskOpacityV', v=>{ if(window.mapOverlayState) window.
 bind('mapViewScale','mapViewScaleV', v=>{ if(window.mapOverlayState) window.mapOverlayState.viewScale = v; });
 ['lineColor','bgColor','startColor','endColor','dotColor','showMarkers'].forEach(id=>$(id).addEventListener('input',render));
 
+// 颜色行右侧的 hex 灰字：文本恒等于对应 <input type="color"> 的当前值（大写）。
+function syncColorHexLabel(id){
+  const input=document.getElementById(id);
+  const out=document.querySelector('[data-hex-for="'+id+'"]');
+  if(!input||!out) return;
+  out.textContent=String(input.value||'').toUpperCase();
+}
+function initColorHexLabels(){
+  document.querySelectorAll('input[type=color]').forEach(input=>{
+    input.addEventListener('input',()=>syncColorHexLabel(input.id));
+    input.addEventListener('change',()=>syncColorHexLabel(input.id));
+    syncColorHexLabel(input.id);
+  });
+}
+initColorHexLabels();
+
 $('expCard').onclick=exportCard;
 $('expDot').onclick=exportDot;
 $('expMp4').onclick=onExpMp4Click;
@@ -1917,14 +2026,22 @@ $('mp4BgMode').addEventListener('change',()=>{
   $('mp4PageColorField').style.display=green?'none':'';
   $('mp4GreenColorField').style.display=green?'':'none';
 });
+// 产物选择存 localStorage，页面加载时读回，缺省 png
+$('exportKindMp4').checked = (()=>{ try { return localStorage.getItem('exportKind')==='mp4'; } catch(_){ return false; } })();
+$('exportKindPng').checked = !$('exportKindMp4').checked;
+document.querySelectorAll('input[name=exportKind]').forEach(el => el.addEventListener('change', updateExportKindUI));
 
 // 地图 overlay 控件
-const savedKey = localStorage.getItem('amap_key') || '';
+// storage 被禁用（Safari 隐私模式、cookie 被阻断、跨站 iframe）时读写会抛，
+// 这两处都在初始化路径上，不兜住会让后面的 setTrackGate / render 整段不执行。
+const savedKey = (()=>{ try { return localStorage.getItem('amap_key') || ''; } catch(_){ return ''; } })();
 $('amapKey').value = savedKey;
 $('amapKey').addEventListener('input', () => {
   const trimmed = $('amapKey').value.trim();
-  if(trimmed) localStorage.setItem('amap_key', trimmed);
-  else localStorage.removeItem('amap_key');
+  try {
+    if(trimmed) localStorage.setItem('amap_key', trimmed);
+    else localStorage.removeItem('amap_key');
+  } catch(_){ /* storage 被禁用：key 只在本次会话有效 */ }
   markOverlayNeedsRefresh();
   scheduleMapAutoFetch();
 });
@@ -1977,6 +2094,7 @@ document.querySelectorAll('input[name=mapOverlayMode]').forEach(el => {
 });
 updateBgModeUI();
 updateMapModeFieldsUI();
+updateExportKindUI();
 updatePreviewScrubLabel();
 if(!mp4Supported()) $('mp4UnsupportedHint').style.display='';
 setTrackGate(false);

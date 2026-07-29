@@ -45,16 +45,32 @@
   跳回 0。
 
 ## UI 结构（工作台）
-- 布局 = 左列 sticky 预览舞台（卡片 canvas + 动画扫拨行 + 轨迹统计 + 定位点图例）+
-  右列四个任务分区卡片：①轨迹 ②背景与卡片 ③线路与标记 ④导出；吸底元素只允许紧凑
-  单行操作条（`.export-actions`），整卡吸底会遮挡其余分区。
+- 布局 = 左列 sticky 预览舞台（卡片 canvas + 动画扫拨行 + 轨迹摘要行）+ 右列三个步骤
+  `.step`：① 轨迹 → ② 样式 → ③ 导出，序号表达先后顺序。舞台自身 `min-height:calc(100vh - 48px)`
+  且内容居中，垂直居中不依赖右列高度。
+- 步骤之间用 `--sp-step` 间距 + 一条 `border-top` 分隔线表达分组，步骤本身没有边框和
+  `--panel` 底色。边框容器只表达两种含义：悬浮层（`.export-actions` 吸底操作条）与从属层
+  （`.map-subpanel` 地图配置子面板，`--panel` 底 + 2px 左竖线 + 12px 缩进）。
+- ② 样式下辖三个 `.subhead` 子组，共同类别是「画面上的视觉对象」：卡片 / 线路 / 定位点；
+  子组之间只用 `--sp-group` 间距，不画线。定位点子组的标题行右侧内联 32px 小预览。
+- ③ 导出用 `exportKind` segmented 切换产物（贴图 PNG / 动画 MP4），两个参数面板与吸底条
+  主按钮随之切换，`updateExportKindUI()` 只改 `style.display` 与 `.active`，不碰 `disabled`；
+  可用性（有无轨迹、导出中互斥）与显隐是两条互不相交的通道。选择存 `localStorage.exportKind`。
+- 视觉 token：字号只有 17（页标题）/ 14（区标题）/ 13（子组标题与控件 label）/ 12（元信息）
+  四档；操作性文字用 `--fg`，`--dim` 只给可跳过的说明；hover 只改亮度（唯一例外是文件列表
+  删除按钮 hover 变红）；segmented 选中态用中性 `#39404d`，蓝色只留给吸底条主按钮与链接；
+  间距走 `--sp-label` / `--sp-field` / `--sp-group` / `--sp-step` 四个变量。
 - 数值参数一律 field 范式：标签（含单位）+ 全宽 slider + 右侧 number 输入，`bind()`
   双向同步并对越界输入 clamp；互斥配置（纯色/地图底图）用 segmented 单选驱动渐进披露。
-- 状态反馈：导出类消息走 ④ 区 `#exportStatus`（成功 ✓ 4s 自清，失败 ✕ 持久），地图链
+- 颜色参数一律 `.color-row` 范式：左 label + 右 28×28 swatch + `data-hex-for` 的 12px 灰字
+  hex 值，起点终点两行装进 `.color-pair` 同行显示。
+- 状态反馈：导出类消息走吸底条的 `#exportStatus`（成功 ✓ 6s 自清，失败 ✕ 持久），地图链
   消息走 ② 区 `#mapOverlayStatus`，两者均 `aria-live="polite"`；用户可见报错为中文人话，
   内部 `Error.code` 供程序分支。
-- 空状态：canvas 内绘引导文字，依赖轨迹的分区加 `.needs-track` 降透明度，示例轨迹按钮
-  提供零成本首个成功体验。
+- gate：`setTrackGate(hasTrack)` 切 `body.has-track`，并对每个 `[data-gate]` 切 `needs-track`
+  + `inert` + `aria-disabled`。未载入轨迹时 `.step-body` 收起、区标题降到 45%、吸底条整条
+  `display:none`，页面上只剩 drop 区 / 画布点击 / 示例轨迹链接三个入口，三者是同一个动作。
+- 空状态引导画在 canvas 内（`renderCard` 的空状态分支），画布本身在无轨迹时可点击选文件。
 
 ## 测试
 - Node 内置 `node:test` + `node:assert/strict`，零框架。
