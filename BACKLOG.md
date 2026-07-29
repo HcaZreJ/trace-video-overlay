@@ -49,8 +49,10 @@
         deps: T3   验收: xml.mjs 去 export 后与原 66–123 行逐字节一致 ✅；fit.mjs blob 哈希不变 ✅；
               main.mjs 净增 1 行 import、删 85 行 ✅；634 测试全绿 ✅；
               浏览器载入 GPX 走通（格式识别为 GPX · 6 点，canvas 356696 像素）✅
-- [ ] T5  basemap 层         file: src/basemap/{diagnose,image,fetch}.mjs
-        deps: T4   验收: 各 ≤ 200 行；全量测试全绿；底图拉取与错误诊断手测通过
+- [x] T5  basemap 层         file: src/basemap/{diagnose,image,fetch}.mjs
+        deps: T4   验收: 三模块逐个与原行段逐字节一致 ✅；main.mjs 净增 1 行 import、删 114 行 ✅；
+              最大 56 行 ✅；634 测试全绿 ✅；浏览器实测无 key 两条路径只出状态文本、
+              零未捕获异常，假 key 活体探针命中 diagnoseAmapApiError 的 INVALID_USER_KEY 分支 ✅
 - [ ] T6  render 层          file: src/render/{primitives,card,dot}.mjs
         deps: T5   验收: 各 ≤ 200 行；全量测试全绿；三种渲染产物与拆分前一致
 - [ ] T7  export 层          file: src/export/{status,png,mp4}.mjs

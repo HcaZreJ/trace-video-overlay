@@ -14,7 +14,6 @@ import {
   lngLatToAmapPixel,
   computeAmapView,
   buildAmapStaticUrl,
-  computeAmapUrlForTrack,
   projectTrackOnAmap,
 } from './core/amap.mjs';
 import {
@@ -28,6 +27,7 @@ import {
 import { concatTrackPoints, reorderTrackFiles } from './core/track-files.mjs';
 import { dotGeometry, clampMp4Duration } from './core/export-params.mjs';
 import { parseTrackFile } from './parse/index.mjs';
+import { fetchAmapBasemap } from './basemap/fetch.mjs';
 import { state, CARD_SIZE } from './state.mjs';
 import { $ } from './dom.mjs';
 
@@ -36,120 +36,6 @@ import { $ } from './dom.mjs';
 //   overlayMode: 'none'|'mask', overlayMaskOpacity: 0..1 }
 // 挂在 window 上（而非纯 let 局部变量）便于浏览器控制台手测
 window.mapOverlayState = null;
-
-/* ==================== 高德静图 fetch 层（浏览器运行时：fetch + JSON 诊断 + Image 兜底 + 内存缓存 + 超时） ==================== */
-// 恒 size=1024、scale=2；静图内容视野恒等于 1024 世界像素 → contentSize=1024。
-const amapBasemapCache = new Map();
-function diagnoseAmapApiError(info, infocode){
-  let message;
-  if(info === 'INVALID_USER_SCODE' || info === 'USERKEY_PLAT_NOMATCH'){
-    message = 'key 类型不对：需要『Web服务』类型的 key，你申请的可能是『Web端(JS API)』类型。请在高德控制台新建一个『Web服务』key';
-  } else if(info === 'DAILY_QUERY_OVER_LIMIT' || info === 'CUQPS_HAS_EXCEEDED_THE_LIMIT'){
-    message = 'key 当日配额/并发已超限，稍后再试或更换 key';
-  } else if(info === 'INVALID_USER_KEY'){
-    message = 'key 无效：请检查是否复制完整';
-  } else {
-    message = `高德接口返回错误：${info}（${infocode}）`;
-  }
-  const err = new Error(message);
-  err.code = 'amap_api_error';
-  return err;
-}
-function loadImageFromBlob(blob){
-  return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(img);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      const err = new Error('fetchAmapBasemap: failed to decode basemap image');
-      err.code = 'fetch_failed';
-      reject(err);
-    };
-    img.src = objectUrl;
-  });
-}
-function loadImageDirect(url){
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    let settled = false;
-    const timer = setTimeout(() => {
-      if(settled) return;
-      settled = true;
-      img.src = '';
-      const err = new Error('fetchAmapBasemap: timed out loading basemap image');
-      err.code = 'fetch_failed';
-      reject(err);
-    }, 15000);
-    img.onload = () => {
-      if(settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(img);
-    };
-    img.onerror = () => {
-      if(settled) return;
-      settled = true;
-      clearTimeout(timer);
-      const err = new Error('fetchAmapBasemap: failed to load basemap image');
-      err.code = 'fetch_failed';
-      reject(err);
-    };
-    img.src = url;
-  });
-}
-async function fetchBasemapViaHttp(url){
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-  let resp;
-  try {
-    resp = await fetch(url, { signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-  const contentType = (resp.headers.get('content-type') || '').toLowerCase();
-  let looksJson = contentType.includes('json');
-  let peeked = null;
-  if(!looksJson){
-    try {
-      peeked = await resp.clone().text();
-      if(peeked.trim().startsWith('{')) looksJson = true;
-    } catch(_){ /* 二进制内容可能无法安全解码为文本，忽略即可 */ }
-  }
-  if(looksJson){
-    let data = null;
-    try { data = JSON.parse(peeked != null ? peeked : await resp.text()); } catch(_){ /* 非合法 JSON，走通用失败分支 */ }
-    if(data && data.info && data.info !== 'OK') throw diagnoseAmapApiError(data.info, data.infocode);
-    const err = new Error('fetchAmapBasemap: unexpected JSON response');
-    err.code = 'fetch_failed';
-    throw err;
-  }
-  const blob = await resp.blob();
-  return loadImageFromBlob(blob);
-}
-async function fetchAmapBasemap({ pointsWgs84, key, traffic }){
-  const { url, center, zoom, spanPx } = computeAmapUrlForTrack(pointsWgs84, 1024, key, 2, traffic);
-  if(amapBasemapCache.has(url)) return { image: amapBasemapCache.get(url), center, zoom, spanPx, contentSize: 1024, url };
-  let image;
-  try {
-    image = await fetchBasemapViaHttp(url);
-  } catch(err) {
-    if(err && err.code === 'amap_api_error') throw err;
-    try {
-      image = await loadImageDirect(url);
-    } catch(_fallbackErr){
-      const finalErr = new Error('底图加载失败：网络问题或跨域受限');
-      finalErr.code = 'fetch_failed';
-      throw finalErr;
-    }
-  }
-  amapBasemapCache.set(url, image);
-  return { image, center, zoom, spanPx, contentSize: 1024, url };
-}
 
 /* ==================== 渲染 ==================== */
 function hexToRgba(hex,alpha){
