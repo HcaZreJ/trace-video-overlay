@@ -84,8 +84,9 @@
 
 ### Wave 10–11 — 收尾
 
-- [ ] T10 测试收拢单一入口   file: tests/unit/{core,fit}.test.mjs
-        deps: T9   验收: `node --test 'tests/**/*.test.mjs'` 一条命令全量全绿；根目录无 *.test.mjs
+- [x] T10 测试收拢单一入口（架构师亲做）   file: tests/unit/{core,fit}.test.mjs
+        deps: T9   验收: 一条命令跑出 635 个全绿 ✅；根目录无 *.test.mjs ✅；
+              harness 的 run-hidden-tests.sh 不受影响（geojsonCoords 81/81）✅
 - [ ] T11 文档全面更新       file: AGENTS.md, PROJECT.md, PATTERNS.md, TECHSTACK.md, DEVFLOW.md, README.md
         deps: T10  验收: 六份文档无 file:// / 双击 / 单文件 / 副本 / 抄；命令实测通过；
               目录结构与 ls 一致

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFIT } from './src/parse/fit.mjs';
+import { parseFIT } from '../../src/parse/fit.mjs';
 
 const u32 = v => [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >>> 24) & 0xff];
 const u16 = v => [v & 0xff, (v >> 8) & 0xff];
