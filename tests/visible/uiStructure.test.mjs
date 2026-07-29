@@ -58,17 +58,19 @@ const BASELINE_IDS = collapse(`
 
 /* ==================== 测试 ==================== */
 
-test('uiStructure: index.html 切成 style / body HTML / 内联 script 三段', () => {
-  assert.ok(CSS.length > 500, `<style> 段应当非空，实际长度 ${CSS.length}`);
+test('uiStructure: 样式 / 结构 / 应用逻辑三段齐备，装载顺序正确', () => {
+  assert.ok(CSS.length > 500, `样式段应当非空，实际长度 ${CSS.length}`);
   assert.ok(HTML.length > 500, `<body> 段应当非空，实际长度 ${HTML.length}`);
-  assert.equal(INLINE_SCRIPTS.length, 1, '页面应当只有一段内联 script');
-  assert.ok(JS.length > 5000, `内联 script 应当非空，实际长度 ${JS.length}`);
+  assert.equal(INLINE_SCRIPTS.length, 0, 'index.html 应当不含内联应用逻辑');
+  assert.ok(JS.length > 5000, `应用 JS 应当非空，实际长度 ${JS.length}`);
 
-  const muxerAt = SRC.indexOf('<script src="mp4-muxer.js">');
-  assert.ok(muxerAt > -1, 'mp4-muxer.js 应当以外部 script 引入');
+  const muxerAt = SRC.indexOf('<script src="vendor/mp4-muxer.js">');
+  assert.ok(muxerAt > -1, 'mp4-muxer.js 应当以外部 classic script 从 vendor/ 引入');
+  const entryAt = SRC.search(/<script\b[^>]*\btype\s*=\s*["']module["'][^>]*>/);
+  assert.ok(entryAt > -1, '应用入口应当是 <script type="module">');
   assert.ok(
-    SRC.indexOf(JS.slice(0, 80)) > muxerAt,
-    '内联 script 应当位于 <script src="mp4-muxer.js"> 之后'
+    entryAt > muxerAt,
+    'module 入口应当位于 vendor/mp4-muxer.js 之后，保证 window.Mp4Muxer 先就位'
   );
 });
 

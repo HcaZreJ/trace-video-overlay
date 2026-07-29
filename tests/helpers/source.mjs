@@ -68,6 +68,11 @@ export function readJs(raw = INDEX_HTML) {
   return readJsParts(raw).join('\n');
 }
 
+/** src/ 下全部模块的绝对路径，按路径排序。 */
+export function listAppModulePaths() {
+  return collectMjs(join(ROOT, 'src'));
+}
+
 /** 全站源码：index.html 原文 + 全部 CSS + 全部应用 JS。「某段旧内容已彻底删除」这类断言用它。 */
 export function readAll(raw = INDEX_HTML) {
   return [raw, readCss(raw), readJs(raw)].join('\n');

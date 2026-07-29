@@ -25,11 +25,12 @@
 
 ### Wave 3 — deps: T0, T1
 
-- [ ] T2  应用逻辑迁出 src/main.mjs   file: src/main.mjs, index.html, vendor/mp4-muxer.js
-        spec: 476–2547 行整体切出；删 27 个内联副本改 import；mp4-muxer.js git mv 进 vendor/；
-              UI 测试的 JS 取材改读 src/main.mjs
-        验收: index.html ≤ 320 行无 <style> 无内联逻辑；守恒校验通过；全量测试全绿；
-              静态服务器手工过完整流程
+- [x] T2  应用逻辑迁出 src/main.mjs   file: src/main.mjs, index.html, vendor/mp4-muxer.js
+        spec: 294–2365 行整体切出；删 28 个副本 + 3 个 gcj helper + 3 个私有常量改 import；
+              mp4-muxer.js git mv 进 vendor/；index.html 换 module 入口
+        验收: index.html 2368 → 295 行、零内联逻辑 ✅；守恒 diff 正文零新增行、526 行纯删除 ✅；
+              tests/ 577/577 + 根目录 57/57 ✅；无头 Chrome 实测六份 CSS 生效、module 跑通、
+              Mp4Muxer 全局就位、零控制台错误 ✅
 
 ### Wave 3–9 — 逐层拆分（依次串行，各自依赖前一个）
 

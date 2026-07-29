@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { readCss, readJs, readInlineScripts } from '../helpers/source.mjs';
+import { execFileSync } from 'node:child_process';
+import { ROOT, readCss, readJs, readInlineScripts, listAppModulePaths } from '../helpers/source.mjs';
 
 /* ==================== index.html 三段切分（style / body HTML / 内联 script） ==================== */
 
@@ -103,18 +104,20 @@ const BASELINE_IDS = collapse(`
 
 /* ==================== 0 · 切分自检 ==================== */
 
-test('uiStructure: index.html 切成 style / body HTML / 内联 script 三段', () => {
-  assert.ok(CSS.length > 500, `<style> 段应当非空，实际长度 ${CSS.length}`);
+test('uiStructure: 样式 / 结构 / 应用逻辑三段齐备，装载顺序正确', () => {
+  assert.ok(CSS.length > 500, `样式段应当非空，实际长度 ${CSS.length}`);
   assert.ok(HTML.length > 500, `<body> 段应当非空，实际长度 ${HTML.length}`);
-  assert.equal(INLINE_SCRIPTS.length, 1, '页面应当只有一段内联 script');
-  assert.ok(JS.length > 5000, `内联 script 应当非空，实际长度 ${JS.length}`);
+  assert.equal(INLINE_SCRIPTS.length, 0, 'index.html 应当不含内联应用逻辑');
+  assert.ok(JS.length > 5000, `应用 JS 应当非空，实际长度 ${JS.length}`);
   assert.ok(!/<script\b/.test(HTML), 'HTML 段里不应当残留 <script> 标记');
 
-  const muxerAt = SRC.indexOf('<script src="mp4-muxer.js">');
-  assert.ok(muxerAt > -1, 'mp4-muxer.js 应当以外部 script 引入');
+  const muxerAt = SRC.indexOf('<script src="vendor/mp4-muxer.js">');
+  assert.ok(muxerAt > -1, 'mp4-muxer.js 应当以外部 classic script 从 vendor/ 引入');
+  const entryAt = SRC.search(/<script\b[^>]*\btype\s*=\s*["']module["'][^>]*>/);
+  assert.ok(entryAt > -1, '应用入口应当是 <script type="module">');
   assert.ok(
-    SRC.indexOf(JS.slice(0, 80)) > muxerAt,
-    '内联 script 应当位于 <script src="mp4-muxer.js"> 之后'
+    entryAt > muxerAt,
+    'module 入口应当位于 vendor/mp4-muxer.js 之后，保证 window.Mp4Muxer 先就位'
   );
 });
 
@@ -174,8 +177,22 @@ test('uiStructure: HTML 中的 id 互不重复', () => {
 
 /* ==================== 4 · 语法闸门 ==================== */
 
-test('uiStructure: 内联 script 整段能被 new Function 编译通过', () => {
-  assert.doesNotThrow(() => new Function(JS), '内联 script 存在语法错误');
+test('uiStructure: 装载的应用 JS 全部通过语法闸门', () => {
+  for (const src of INLINE_SCRIPTS) {
+    assert.doesNotThrow(() => new Function(src), '内联 script 存在语法错误');
+  }
+
+  const modules = listAppModulePaths();
+  assert.ok(modules.length > 0, 'src/ 下应当有应用模块');
+  for (const path of modules) {
+    const rel = path.slice(ROOT.length + 1);
+    try {
+      // .mjs 按模块语法解析，import / export 合法
+      execFileSync(process.execPath, ['--check', path], { stdio: 'pipe' });
+    } catch (err) {
+      assert.fail(`${rel} 存在语法错误：${String(err.stderr || err.message).trim()}`);
+    }
+  }
 });
 
 /* ==================== 5 · a11y 属性齐全 ==================== */
