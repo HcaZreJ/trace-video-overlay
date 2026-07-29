@@ -53,8 +53,12 @@
         deps: T4   验收: 三模块逐个与原行段逐字节一致 ✅；main.mjs 净增 1 行 import、删 114 行 ✅；
               最大 56 行 ✅；634 测试全绿 ✅；浏览器实测无 key 两条路径只出状态文本、
               零未捕获异常，假 key 活体探针命中 diagnoseAmapApiError 的 INVALID_USER_KEY 分支 ✅
-- [ ] T6  render 层          file: src/render/{primitives,card,dot}.mjs
-        deps: T5   验收: 各 ≤ 200 行；全量测试全绿；三种渲染产物与拆分前一致
+- [x] T6  render 层          file: src/render/{primitives,card,dot}.mjs
+        deps: T5   验收: 四个函数体逐字节一致 ✅；最大 158 行 ✅；634 测试全绿 ✅；
+              HEAD 版与改动版双端口跑像素签名，card/dot 两块 canvas 的非透明像素数、
+              字节和、FNV-1a/djb2、色数分布、25 个网格采样点 RGBA 全等 ✅；
+              renderFrame 两个 bgMode 分支运行时冒烟通过 ✅；
+              顺带清掉 8 个随搬迁积下的死 import（架构师做）✅
 - [ ] T7  export 层          file: src/export/{status,png,mp4}.mjs
         deps: T6   验收: 各 ≤ 200 行；全量测试全绿；PNG · MP4 · 取消 · 关页拦截手测通过
 - [ ] T8  ui 层              file: src/ui/{dom,state,track-errors,track-panel,map-panel,preview,controls}.mjs

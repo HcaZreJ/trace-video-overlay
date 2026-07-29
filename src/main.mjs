@@ -1,21 +1,4 @@
-import {
-  mercatorX,
-  mercatorY,
-  smoothTrack,
-  projectTrack,
-  trackDistanceKm,
-  pointAtProgress,
-} from './core/geo.mjs';
-import { wgs84ToGcj02 } from './core/gcj02.mjs';
-import {
-  AMAP_STATIC_ZOOM_BIAS,
-  computeOverlayScale,
-  computeBasemapDrawRect,
-  lngLatToAmapPixel,
-  computeAmapView,
-  buildAmapStaticUrl,
-  projectTrackOnAmap,
-} from './core/amap.mjs';
+import { trackDistanceKm } from './core/geo.mjs';
 import {
   parseHex,
   formatHex,
@@ -25,9 +8,11 @@ import {
   hsvToRgb,
 } from './core/color.mjs';
 import { concatTrackPoints, reorderTrackFiles } from './core/track-files.mjs';
-import { dotGeometry, clampMp4Duration } from './core/export-params.mjs';
+import { clampMp4Duration } from './core/export-params.mjs';
 import { parseTrackFile } from './parse/index.mjs';
 import { fetchAmapBasemap } from './basemap/fetch.mjs';
+import { renderCard, renderFrame } from './render/card.mjs';
+import { renderDot } from './render/dot.mjs';
 import { state, CARD_SIZE } from './state.mjs';
 import { $ } from './dom.mjs';
 
@@ -38,182 +23,6 @@ import { $ } from './dom.mjs';
 window.mapOverlayState = null;
 
 /* ==================== 渲染 ==================== */
-function hexToRgba(hex,alpha){
-  const n=parseInt(hex.slice(1),16);
-  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${alpha})`;
-}
-function strokePath(ctx,proj,color,width){
-  ctx.strokeStyle=color; ctx.lineWidth=width; ctx.lineCap='round'; ctx.lineJoin='round';
-  ctx.beginPath(); ctx.moveTo(proj.points[0].x,proj.points[0].y);
-  for(let i=1;i<proj.points.length;i++) ctx.lineTo(proj.points[i].x,proj.points[i].y);
-  ctx.stroke();
-}
-function drawMarker(ctx,pt,color,size){
-  const r=size/2;
-  ctx.beginPath(); ctx.arc(pt.x,pt.y,r,0,Math.PI*2);
-  ctx.fillStyle=color; ctx.fill();
-  ctx.lineWidth=Math.max(2,size*0.175); ctx.strokeStyle='#fff'; ctx.stroke();
-}
-function renderCard(canvas,size,opts={}){
-  const ctx=canvas.getContext('2d');
-  canvas.width=canvas.height=size;
-  ctx.clearRect(0,0,size,size);
-  if(!state.trackPoints){
-    const emptyScale=size/CARD_SIZE;
-    ctx.save();
-    ctx.fillStyle='#8a93a2';
-    ctx.textAlign='center';
-    ctx.textBaseline='middle';
-    ctx.font=`${Math.round(20*emptyScale)}px -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif`;
-    ctx.fillText('拖入轨迹文件，或点击这里选择文件',size/2,size/2-14*emptyScale);
-    if($('loadSample')&&!$('loadSample').hidden){
-      ctx.font=`${Math.round(15*emptyScale)}px -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif`;
-      ctx.fillText('也可以先载入示例轨迹',size/2,size/2+14*emptyScale);
-    }
-    ctx.restore();
-    return;
-  }
-  const scale=size/CARD_SIZE;
-  const radius=+$('radius').value*scale;
-  const pad=+$('pad').value*scale;
-  const lineWidth=+$('lineWidth').value*scale;
-
-  const overlay=window.mapOverlayState;
-  if(overlay){
-    // 地图 overlay 模式：底图与轨迹共享同一 world→canvas 仿射变换 k，对齐靠数学保证。
-    const k = computeOverlayScale(overlay.spanPx, size, pad, overlay.viewScale);
-    const rect = computeBasemapDrawRect(size, overlay.contentSize, k);
-    ctx.save();
-    ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
-    // 底色垫在底图之下：取景缩放 <1 露出的边界处显示底色（含透明度，PNG 导出直接保留）
-    ctx.fillStyle=hexToRgba($('bgColor').value,+$('bgOpacity').value/100);
-    ctx.fillRect(0,0,size,size);
-    ctx.drawImage(overlay.basemapImage, rect.x, rect.y, rect.w, rect.h);
-    if(overlay.overlayMode==='mask'){
-      ctx.fillStyle=`rgba(0,0,0,${overlay.overlayMaskOpacity})`;
-      ctx.fillRect(0,0,size,size);
-    }
-    const proj = projectTrackOnAmap(state.trackPoints,size,overlay.mapCenter,overlay.mapZoom,k);
-    strokePath(ctx,proj,$('lineColor').value,lineWidth);
-    if($('showMarkers').checked){
-      const mr=+$('markerSize').value*scale;
-      drawMarker(ctx,proj.points[0],$('startColor').value,mr);
-      drawMarker(ctx,proj.points.at(-1),$('endColor').value,mr);
-    }
-    if(opts.previewDot){
-      const p = pointAtProgress(proj.points, opts.previewProgress ?? 0.5);
-      if(p){
-        const d = +$('dotSize').value * scale;
-        const g = dotGeometry(d);
-        ctx.save();
-        ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
-        ctx.beginPath(); ctx.arc(p.x, p.y, g.outerR, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
-        ctx.restore();
-        ctx.beginPath(); ctx.arc(p.x, p.y, g.coreR, 0, Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
-      }
-    }
-    ctx.restore();
-    return;
-  }
-
-  ctx.save();
-  ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
-  ctx.fillStyle=hexToRgba($('bgColor').value,+$('bgOpacity').value/100);
-  ctx.fillRect(0,0,size,size);
-
-  const proj=projectTrack(state.trackPoints,size-2*pad);
-  ctx.save(); ctx.translate(pad,pad);
-  strokePath(ctx,proj,$('lineColor').value,lineWidth);
-  if($('showMarkers').checked){
-    const mr=+$('markerSize').value*scale;
-    drawMarker(ctx,proj.points[0],$('startColor').value,mr);
-    drawMarker(ctx,proj.points.at(-1),$('endColor').value,mr);
-  }
-  if(opts.previewDot){
-    const p = pointAtProgress(proj.points, opts.previewProgress ?? 0.5);
-    if(p){
-      const d = +$('dotSize').value * scale;
-      const g = dotGeometry(d);
-      ctx.save();
-      ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
-      ctx.beginPath(); ctx.arc(p.x, p.y, g.outerR, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
-      ctx.restore();
-      ctx.beginPath(); ctx.arc(p.x, p.y, g.coreR, 0, Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
-    }
-  }
-  ctx.restore();
-  ctx.restore();
-}
-function renderDot(canvas,size){
-  const ctx=canvas.getContext('2d');
-  const g = dotGeometry(size);
-  canvas.width=canvas.height=g.full;
-  ctx.clearRect(0,0,g.full,g.full);
-  const c=g.full/2;
-  ctx.save();
-  ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
-  ctx.beginPath(); ctx.arc(c,c,g.outerR,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
-  ctx.restore();
-  ctx.beginPath(); ctx.arc(c,c,g.coreR,0,Math.PI*2); ctx.fillStyle=$('dotColor').value; ctx.fill();
-}
-// 逐帧渲染（MP4 导出用）：整帧不透明背景 + 全线常显 + 定位点走到 progress 处。
-// 复用 projectTrack/strokePath/drawMarker/pointAtProgress；参数全部来自 opts（便于逐帧/离屏，不读 DOM）。
-function renderFrame(ctx,size,progress,opts){
-  const scale=size/CARD_SIZE;
-  const radius=opts.radius*scale, pad=opts.pad*scale, lineWidth=opts.lineWidth*scale;
-
-  ctx.clearRect(0,0,size,size);
-  if(!state.trackPoints) return;
-
-  // 背景第一层：整帧不透明（MP4 无 alpha，避免透出黑）
-  ctx.fillStyle=(opts.bgMode==='green')?opts.greenColor:opts.pageColor;
-  ctx.fillRect(0,0,size,size);
-
-  ctx.save();
-  let proj;
-  if(opts.bgMode!=='green'&&opts.basemapImage){
-    // 卡片模式 + 地图底图：底图与轨迹共享同一 world→canvas 仿射变换 k，对齐靠数学保证。
-    const k = computeOverlayScale(opts.spanPx, size, pad, opts.viewScale);
-    const rect = computeBasemapDrawRect(size, opts.contentSize, k);
-    ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
-    // 底色垫在底图之下：与 renderCard 同构，取景缩放 <1 露出的边界处显示底色
-    ctx.fillStyle=hexToRgba(opts.bgColor,opts.bgOpacity);
-    ctx.fillRect(0,0,size,size);
-    ctx.drawImage(opts.basemapImage, rect.x, rect.y, rect.w, rect.h);
-    if(opts.overlayMode==='mask'){
-      ctx.fillStyle=`rgba(0,0,0,${opts.overlayMaskOpacity})`;
-      ctx.fillRect(0,0,size,size);
-    }
-    proj = projectTrackOnAmap(state.trackPoints,size,opts.mapCenter,opts.mapZoom,k);
-  } else {
-    if(opts.bgMode!=='green'){
-      // 卡片模式：圆角裁剪 + 叠半透明卡片底，线路/标记/定位点都画在圆角内
-      ctx.beginPath(); ctx.roundRect(0,0,size,size,radius); ctx.clip();
-      ctx.fillStyle=hexToRgba(opts.bgColor,opts.bgOpacity);
-      ctx.fillRect(0,0,size,size);
-    }
-    proj=projectTrack(state.trackPoints,size-2*pad);
-    ctx.translate(pad,pad);
-  }
-  strokePath(ctx,proj,opts.lineColor,lineWidth);
-  if(opts.showMarkers){
-    const mr=opts.markerSize*scale;
-    drawMarker(ctx,proj.points[0],opts.startColor,mr);
-    drawMarker(ctx,proj.points.at(-1),opts.endColor,mr);
-  }
-  // 定位点：仿 renderDot（白环 + 彩色心 + 阴影），直径随 dotSize*scale
-  const p=pointAtProgress(proj.points,progress);
-  if(p){
-    const d=opts.dotSize*scale;
-    const g=dotGeometry(d);
-    ctx.save();
-    ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
-    ctx.beginPath(); ctx.arc(p.x,p.y,g.outerR,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(p.x,p.y,g.coreR,0,Math.PI*2); ctx.fillStyle=opts.dotColor; ctx.fill();
-  }
-  ctx.restore();
-}
 function render(){
   try {
     renderCard($('card'),CARD_SIZE,{previewDot:true, previewProgress: state.previewProgress});
