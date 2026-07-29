@@ -45,8 +45,10 @@
         验收: 逆变换 diff 为空，改动面严格限于两类机械替换 ✅；634 个测试全绿 ✅；
               浏览器载入示例轨迹走通完整链路（info 文案 · 文件列表 · has-track gate ·
               canvas 356696 像素 · 导出解锁 · 扫拨标签）✅
-- [ ] T4  parse 层           file: src/parse/{index,fit,geojson,csv,xml}.mjs
-        deps: T3   验收: 各 ≤ 200 行；fit.mjs 移入；全量测试全绿；守恒校验通过
+- [x] T4  parse 层           file: src/parse/{index,fit,geojson,csv,xml}.mjs
+        deps: T3   验收: xml.mjs 去 export 后与原 66–123 行逐字节一致 ✅；fit.mjs blob 哈希不变 ✅；
+              main.mjs 净增 1 行 import、删 85 行 ✅；634 测试全绿 ✅；
+              浏览器载入 GPX 走通（格式识别为 GPX · 6 点，canvas 356696 像素）✅
 - [ ] T5  basemap 层         file: src/basemap/{diagnose,image,fetch}.mjs
         deps: T4   验收: 各 ≤ 200 行；全量测试全绿；底图拉取与错误诊断手测通过
 - [ ] T6  render 层          file: src/render/{primitives,card,dot}.mjs

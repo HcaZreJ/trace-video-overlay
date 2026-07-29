@@ -1,4 +1,3 @@
-import { parseFIT } from '../fit.mjs';
 import {
   mercatorX,
   mercatorY,
@@ -28,8 +27,7 @@ import {
 } from './core/color.mjs';
 import { concatTrackPoints, reorderTrackFiles } from './core/track-files.mjs';
 import { dotGeometry, clampMp4Duration } from './core/export-params.mjs';
-import { extractGeoJSONCoords } from './parse/geojson.mjs';
-import { extractTextCoords } from './parse/csv.mjs';
+import { parseTrackFile } from './parse/index.mjs';
 import { state, CARD_SIZE } from './state.mjs';
 import { $ } from './dom.mjs';
 
@@ -38,89 +36,6 @@ import { $ } from './dom.mjs';
 //   overlayMode: 'none'|'mask', overlayMaskOpacity: 0..1 }
 // 挂在 window 上（而非纯 let 局部变量）便于浏览器控制台手测
 window.mapOverlayState = null;
-
-/* ==================== 轨迹解析 ==================== */
-async function parseTrackFile(file){
-  const name=file.name.toLowerCase();
-  if(name.endsWith('.fit')){
-    const pts=parseFIT(new Uint8Array(await file.arrayBuffer()));
-    return pts.length>1 ? {points:pts,format:'FIT'} : null;
-  }
-  const text=await file.text();
-  if(name.endsWith('.geojson')||name.endsWith('.json')){
-    try{ const c=extractGeoJSONCoords(JSON.parse(text)); if(c.length>1) return {points:c,format:'GeoJSON'}; }catch(_){}
-  }
-  if(/\.(gpx|kml|tcx|xml)$/.test(name)){
-    try{
-      const xml=new DOMParser().parseFromString(text,'text/xml');
-      if(!xml.querySelector('parsererror')){
-        const k=extractKMLCoords(xml); if(k.length>1) return {points:k,format:'KML'};
-        const c=extractTCXCoords(xml);  if(c.length>1) return {points:c,format:'TCX'};
-        const g=extractGPXCoords(xml);  if(g.length>1) return {points:g,format:'GPX'};
-      }
-    }catch(_){}
-  }
-  const t=extractTextCoords(text); if(t.length>1) return {points:t,format:'CSV'};
-  return null;
-}
-function ptFromAttrEl(el){
-  const lat=parseFloat(el.getAttribute('lat')),lon=parseFloat(el.getAttribute('lon'));
-  if(isNaN(lat)||isNaN(lon)) return null;
-  const p={lng:lon,lat};
-  const e=el.querySelector('ele'); if(e){ const v=parseFloat(e.textContent); if(!isNaN(v)) p.ele=v; }
-  const t=el.querySelector('time'); if(t){ const ms=Date.parse(t.textContent.trim()); if(!isNaN(ms)) p.time=ms; }
-  return p;
-}
-function extractGPXCoords(xml){
-  const pts=[];
-  xml.querySelectorAll('trkpt').forEach(el=>{ const p=ptFromAttrEl(el); if(p) pts.push(p); });
-  if(pts.length===0) xml.querySelectorAll('rtept').forEach(el=>{ const p=ptFromAttrEl(el); if(p) pts.push(p); });
-  return pts;
-}
-function extractTCXCoords(xml){
-  const pts=[];
-  xml.querySelectorAll('Trackpoint').forEach(tp=>{
-    const latEl=tp.querySelector('LatitudeDegrees'), lonEl=tp.querySelector('LongitudeDegrees');
-    if(!latEl||!lonEl) return;
-    const lat=parseFloat(latEl.textContent), lon=parseFloat(lonEl.textContent);
-    if(isNaN(lat)||isNaN(lon)) return;
-    const p={lng:lon,lat};
-    const a=tp.querySelector('AltitudeMeters'); if(a){ const v=parseFloat(a.textContent); if(!isNaN(v)) p.ele=v; }
-    const t=tp.querySelector('Time'); if(t){ const ms=Date.parse(t.textContent.trim()); if(!isNaN(ms)) p.time=ms; }
-    pts.push(p);
-  });
-  return pts;
-}
-function extractKMLCoords(xml){
-  const track=[];
-  xml.querySelectorAll('gx\\:Track, Track').forEach(trackEl=>{
-    const whens=[...trackEl.querySelectorAll('when')].map(w=>Date.parse(w.textContent.trim()));
-    [...trackEl.querySelectorAll('gx\\:coord, coord')].forEach((el,i)=>{
-      const p=el.textContent.trim().split(/\s+/);
-      const lng=parseFloat(p[0]),lat=parseFloat(p[1]),ele=parseFloat(p[2]);
-      if(!isNaN(lng)&&!isNaN(lat)){
-        const pt={lng,lat}; if(!isNaN(ele)) pt.ele=ele;
-        if(whens[i]!=null&&!isNaN(whens[i])) pt.time=whens[i];
-        track.push(pt);
-      }
-    });
-  });
-  if(track.length) return track;
-  const line=[];
-  xml.querySelectorAll('LineString coordinates, Polygon coordinates').forEach(el=>{
-    el.textContent.trim().split(/\s+/).forEach(chunk=>{
-      const p=chunk.split(','); const lng=parseFloat(p[0]),lat=parseFloat(p[1]),ele=parseFloat(p[2]);
-      if(!isNaN(lng)&&!isNaN(lat)){ const pt={lng,lat}; if(!isNaN(ele)) pt.ele=ele; line.push(pt); }
-    });
-  });
-  if(line.length) return line;
-  const pt=[];
-  xml.querySelectorAll('Placemark Point coordinates').forEach(el=>{
-    const p=el.textContent.trim().split(','); const lng=parseFloat(p[0]),lat=parseFloat(p[1]);
-    if(!isNaN(lng)&&!isNaN(lat)) pt.push({lng,lat});
-  });
-  return pt;
-}
 
 /* ==================== 高德静图 fetch 层（浏览器运行时：fetch + JSON 诊断 + Image 兜底 + 内存缓存 + 超时） ==================== */
 // 恒 size=1024、scale=2；静图内容视野恒等于 1024 世界像素 → contentSize=1024。
