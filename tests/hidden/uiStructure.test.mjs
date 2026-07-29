@@ -177,6 +177,22 @@ test('uiStructure: HTML 中的 id 互不重复', () => {
 
 /* ==================== 4 · 语法闸门 ==================== */
 
+test('uiStructure: 没有任何模块反向导入入口 main.mjs', () => {
+  const offenders = [];
+  for (const path of listAppModulePaths()) {
+    const rel = path.slice(ROOT.length + 1);
+    if (rel === 'src/main.mjs') continue;
+    for (const m of readFileSync(path, 'utf8').matchAll(/^\s*import\s[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+      if (/(^|\/)main\.mjs$/.test(m[1])) offenders.push(`${rel} → ${m[1]}`);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `main.mjs 是装配入口，依赖只能从它流向各层：\n${offenders.join('\n')}`,
+  );
+});
+
 test('uiStructure: 装载的应用 JS 全部通过语法闸门', () => {
   for (const src of INLINE_SCRIPTS) {
     assert.doesNotThrow(() => new Function(src), '内联 script 存在语法错误');

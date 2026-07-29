@@ -59,10 +59,18 @@
               字节和、FNV-1a/djb2、色数分布、25 个网格采样点 RGBA 全等 ✅；
               renderFrame 两个 bgMode 分支运行时冒烟通过 ✅；
               顺带清掉 8 个随搬迁积下的死 import（架构师做）✅
-- [ ] T7  export 层          file: src/export/{status,png,mp4}.mjs
-        deps: T6   验收: 各 ≤ 200 行；全量测试全绿；PNG · MP4 · 取消 · 关页拦截手测通过
-- [ ] T8  ui 层              file: src/ui/{dom,state,track-errors,track-panel,map-panel,preview,controls}.mjs
-        deps: T7   验收: 各 ≤ 200 行；main.mjs ≤ 200 行；全量测试全绿；面板交互手测通过
+- [x] T7  export 层          file: src/export/{status,png,mp4}.mjs
+        deps: T6   验收: 11 个函数体逐字节一致 ✅；最大 183 行 ✅；src/ 零未使用导入 ✅；
+              浏览器真抓产物：卡片 PNG 53511 字节 · 定位点 PNG 11290 字节（均命中 PNG 魔数）
+              · MP4 73355 字节 video/mp4 ✅；底图缺失 → 「改用无底图导出」的 exportState
+              三模块共读共写跑通 ✅；导出中取消与关页拦截跑通 ✅
+        遗留: 引入 main.mjs ↔ export/ 循环 import（exportCard/exportMp4 要调仍住在
+              main.mjs 的 onPreviewMapOverlay / stopPreviewPlay）。已写成断言
+              「没有任何模块反向导入入口 main.mjs」现在红着，T8 迁走 ui 层后必须转绿。
+- [ ] T8  ui 层              file: src/ui/{track-errors,track-panel,map-panel,preview,controls}.mjs
+        （dom.mjs 与 state.mjs 已在 T3a 落到 src/ 顶层，不在 ui/ 下）
+        deps: T7   验收: 各 ≤ 200 行；main.mjs ≤ 200 行；全量测试全绿含那条反向依赖断言转绿；
+              面板交互手测通过
 - [ ] T9  取色器四拆         file: src/ui/color-picker/{index,popup,canvas,inputs}.mjs
         deps: T8   验收: 各 ≤ 200 行；全量测试全绿；取色器七条交互路径手测通过
 
