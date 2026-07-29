@@ -1,4 +1,5 @@
-import { trackDistanceKm } from './core/geo.mjs';
+// 应用入口 · 装配：把界面各面板的行为接到 DOM 事件上，跑首屏初始化。
+// 面板逻辑本身在 ui/ 下，这里只关心接线与初始化顺序。
 import {
   parseHex,
   formatHex,
@@ -7,17 +8,30 @@ import {
   rgbToHsv,
   hsvToRgb,
 } from './core/color.mjs';
-import { concatTrackPoints, reorderTrackFiles } from './core/track-files.mjs';
 import { clampMp4Duration } from './core/export-params.mjs';
-import { parseTrackFile } from './parse/index.mjs';
 import { fetchAmapBasemap } from './basemap/fetch.mjs';
-import { renderCard } from './render/card.mjs';
-import { renderDot } from './render/dot.mjs';
-import { state, CARD_SIZE } from './state.mjs';
+import { state } from './state.mjs';
 import { $ } from './dom.mjs';
 import { updateExportKindUI } from './export/status.mjs';
 import { exportCard, exportDot } from './export/png.mjs';
 import { mp4Supported, onExpMp4Click } from './export/mp4.mjs';
+import {
+  previewPlaying,
+  render,
+  startPreviewPlay,
+  stopPreviewPlay,
+  updatePreviewScrubLabel,
+} from './ui/preview.mjs';
+import {
+  setMapStatus,
+  markOverlayNeedsRefresh,
+  scheduleMapAutoFetch,
+  onPreviewMapOverlay,
+  updateBgModeUI,
+  updateMapModeFieldsUI,
+} from './ui/map-panel.mjs';
+import { setTrackGate, loadTrackFiles, trackFileAction } from './ui/track-panel.mjs';
+import { bind, initColorHexLabels } from './ui/controls.mjs';
 
 // 地图 overlay 状态：null 表示未开启（默认）。开启时字段：
 // { basemapImage, mapCenter, mapZoom, spanPx, contentSize, viewScale,
@@ -25,57 +39,7 @@ import { mp4Supported, onExpMp4Click } from './export/mp4.mjs';
 // 挂在 window 上（而非纯 let 局部变量）便于浏览器控制台手测
 window.mapOverlayState = null;
 
-/* ==================== 渲染 ==================== */
-function render(){
-  try {
-    renderCard($('card'),CARD_SIZE,{previewDot:true, previewProgress: state.previewProgress});
-  } catch(err) {
-    console.error(err);
-    setMapStatus(`渲染失败：${err.message}`,'error');
-  }
-  const dotExportPx = Math.round(+$('dotSize').value * (+$('exportRes').value||1080) / CARD_SIZE);
-  renderDot($('dot'), dotExportPx);
-  // 内联小预览：把 dotSize 的取值域 8–160 线性映射进 32px 棋盘格盒子（6–28px），随滑杆实时变化
-  const dispPx = Math.round(6 + (+$('dotSize').value - 8) / (160 - 8) * (28 - 6));
-  $('dot').style.width = $('dot').style.height = dispPx + 'px';
-}
-
-/* ==================== 动画预览播放（扫拨条所见即所得） ==================== */
-let previewPlaying = false;
-let previewPlayRafId = null;
-let previewPlayLastTs = null;
-function previewPlayStep(ts){
-  if(!previewPlaying) return;
-  if(previewPlayLastTs !== null){
-    const dt = ts - previewPlayLastTs;
-    const durationMs = clampMp4Duration(+$('mp4Duration').value) * 1000;
-    let p = state.previewProgress + dt / durationMs;
-    p = p % 1;
-    state.previewProgress = p;
-    $('previewProgress').value = Math.round(state.previewProgress * 1000);
-    render();
-  }
-  previewPlayLastTs = ts;
-  previewPlayRafId = requestAnimationFrame(previewPlayStep);
-}
-function startPreviewPlay(){
-  if(previewPlaying) return;
-  previewPlaying = true;
-  previewPlayLastTs = null;
-  $('previewPlay').textContent = '⏸';
-  $('previewPlay').setAttribute('aria-pressed','true');
-  previewPlayRafId = requestAnimationFrame(previewPlayStep);
-}
-export function stopPreviewPlay(){
-  previewPlaying = false;
-  if(previewPlayRafId !== null){ cancelAnimationFrame(previewPlayRafId); previewPlayRafId = null; }
-  previewPlayLastTs = null;
-  $('previewPlay').textContent = '▶';
-  $('previewPlay').setAttribute('aria-pressed','false');
-}
-function updatePreviewScrubLabel(){
-  $('previewScrubLabel').textContent = `动画预览 · ${clampMp4Duration(+$('mp4Duration').value)} 秒`;
-}
+/* ==================== 事件绑定与首屏初始化 ==================== */
 $('previewPlay').addEventListener('click', () => {
   if(previewPlaying) stopPreviewPlay(); else startPreviewPlay();
 });
@@ -84,230 +48,7 @@ $('previewProgress').addEventListener('input', () => {
   state.previewProgress = (+$('previewProgress').value) / 1000;
   render();
 });
-
-/* ==================== 地图 overlay UI ==================== */
-function setMapStatus(msg, kind){
-  const el = $('mapOverlayStatus');
-  if(!msg || kind === 'clear'){ el.style.display = 'none'; el.textContent = ''; return; }
-  el.style.display = '';
-  el.textContent = msg;
-  el.style.color = kind === 'error' ? '#ff453a' : kind === 'warn' ? '#ff9f0a' : kind === 'ok' ? '#34c759' : 'var(--dim)';
-}
-function markOverlayNeedsRefresh(){
-  state.mapOverlayNeedsRefresh = true;
-}
-let mapFetchInFlight = false;
-let mapFetchPending = false;
-let mapAutoFetchTimer = null;
-function scheduleMapAutoFetch(){
-  if(mapAutoFetchTimer) clearTimeout(mapAutoFetchTimer);
-  mapAutoFetchTimer = setTimeout(() => {
-    mapAutoFetchTimer = null;
-    const key = ($('amapKey').value || '').trim();
-    if($('mapOverlay').checked && key && state.trackPoints && state.trackPoints.length){
-      onPreviewMapOverlay();
-    }
-  }, 600);
-}
-export async function onPreviewMapOverlay(){
-  const key = ($('amapKey').value || '').trim();
-  if(!key){ setMapStatus('请先填写高德 API Key', 'error'); return; }
-  if(!state.trackPoints || state.trackPoints.length === 0){ setMapStatus('请先载入轨迹', 'error'); return; }
-  if(mapFetchInFlight){ mapFetchPending = true; return; }
-  mapFetchInFlight = true;
-  const btn = $('mapPreview');
-  btn.disabled = true; setMapStatus('正在拉取底图…', 'info');
-  try {
-    const result = await fetchAmapBasemap({
-      pointsWgs84: state.trackPoints,
-      key,
-      traffic: $('mapTraffic').checked ? 1 : undefined,
-    });
-    window.mapOverlayState = {
-      basemapImage: result.image,
-      mapCenter: result.center,
-      mapZoom: result.zoom,
-      spanPx: result.spanPx,
-      contentSize: result.contentSize,
-      viewScale: +$('mapViewScale').value,
-      overlayMode: document.querySelector('input[name=mapOverlayMode]:checked').value,
-      overlayMaskOpacity: (+$('mapMaskOpacity').value) / 100,
-    };
-    state.mapOverlayNeedsRefresh = false;
-    setMapStatus(`✓ 底图已加载（缩放级别 ${result.zoom}）`, 'ok');
-    render();
-  } catch(err){
-    window.mapOverlayState = null;
-    const msg = (err && err.code === 'amap_api_error') ? err.message : `底图加载失败：${err && err.message ? err.message : err}`;
-    setMapStatus(msg, 'error');
-    render();
-  } finally {
-    btn.disabled = false;
-    mapFetchInFlight = false;
-    if(mapFetchPending){
-      mapFetchPending = false;
-      onPreviewMapOverlay();
-    }
-  }
-}
-function updateBgModeUI(){
-  const mapMode = $('bgModeMap').checked;
-  $('bgModeSolidLabel').classList.toggle('active', !mapMode);
-  $('bgModeMapLabel').classList.toggle('active', mapMode);
-  $('bgMapFields').style.display = mapMode ? '' : 'none';
-}
-function updateMapModeFieldsUI(){
-  const maskMode = document.querySelector('input[name=mapOverlayMode]:checked').value === 'mask';
-  $('mapMaskOpacityField').style.display = maskMode ? '' : 'none';
-}
 $('mapPreview').addEventListener('click', onPreviewMapOverlay);
-
-/* ==================== 交互 ==================== */
-function clearTrackErrors(){
-  const el=$('trackErrors');
-  el.style.display='none';
-  el.textContent='';
-}
-function showTrackErrors(failedNames){
-  const el=$('trackErrors');
-  el.textContent='';
-  el.style.color='#ff453a';
-  const title=document.createElement('div');
-  title.textContent='解析失败：'+failedNames.join('、');
-  el.appendChild(title);
-  const help=document.createElement('div');
-  help.style.marginTop='4px';
-  help.textContent='支持 gpx/kml/tcx/fit/geojson/csv；行者/Strava/佳明等 App 的活动详情页都能导出 GPX';
-  el.appendChild(help);
-  const closeBtn=document.createElement('button');
-  closeBtn.type='button';
-  closeBtn.className='status-btn';
-  closeBtn.style.marginTop='6px';
-  closeBtn.textContent='关闭';
-  closeBtn.addEventListener('click',clearTrackErrors);
-  el.appendChild(closeBtn);
-  el.style.display='';
-}
-let trackUndoTimer=null;
-function clearTrackUndo(){
-  if(trackUndoTimer){ clearTimeout(trackUndoTimer); trackUndoTimer=null; }
-  const el=$('trackUndo');
-  el.style.display='none';
-  el.textContent='';
-}
-function showTrackUndo(removedFile,removedIndex){
-  clearTrackUndo();
-  const el=$('trackUndo');
-  el.textContent=`已移除「${removedFile.name}」 `;
-  const undoBtn=document.createElement('button');
-  undoBtn.type='button';
-  undoBtn.className='status-btn';
-  undoBtn.textContent='撤销';
-  undoBtn.addEventListener('click',()=>{
-    clearTrackUndo();
-    state.trackFiles=[...trackFiles.slice(0,removedIndex),removedFile,...trackFiles.slice(removedIndex)];
-    recomputeTrack();
-  });
-  el.appendChild(undoBtn);
-  el.style.display='';
-  trackUndoTimer=setTimeout(clearTrackUndo,5000);
-}
-function setTrackGate(hasTrack){
-  // body.has-track 供舞台外的元素（示例轨迹链接、空状态画布光标）按轨迹状态改样式
-  document.body.classList.toggle('has-track',hasTrack);
-  document.querySelectorAll('[data-gate]').forEach(el=>{
-    el.classList.toggle('needs-track',!hasTrack);
-    // inert 下沉到 .step-body：整块设 inert 会把区标题和「载入轨迹后可用」也移出无障碍树，
-    // 而空状态下这两句正是解释「为什么这里是空的」的唯一文字
-    const inertTarget=el.querySelector(':scope > .step-body')||el;
-    inertTarget.inert=!hasTrack;
-    if(hasTrack) el.removeAttribute('aria-disabled'); else el.setAttribute('aria-disabled','true');
-  });
-  const hint=$('trackGateHint');
-  if(hint) hint.style.display=hasTrack?'none':'';
-}
-async function loadTrackFiles(files){
-  clearTrackErrors();
-  let added=0; const failed=[];
-  for(const file of files){
-    try{
-      const r=await parseTrackFile(file);
-      if(r){ state.trackFiles.push({name:file.name,format:r.format,points:r.points}); added++; }
-      else failed.push(file.name);
-    }catch(_){ failed.push(file.name); }
-  }
-  if(failed.length) showTrackErrors(failed);
-  if(added){ clearTrackUndo(); recomputeTrack(); }
-}
-function recomputeTrack(){
-  state.trackPoints=concatTrackPoints(state.trackFiles);
-  if(!state.trackPoints){ clearTrack(); return; }
-  const km=trackDistanceKm(state.trackPoints);
-  $('info').innerHTML=`合并 <b>${state.trackFiles.length}</b> 个文件 · <b>${state.trackPoints.length}</b> 个轨迹点 · 约 <b>${km.toFixed(1)}</b> km`;
-  $('expCard').disabled=false;
-  $('expDot').disabled=false;
-  if(mp4Supported()) $('expMp4').disabled=false;
-  $('previewScrub').style.display='';
-  setTrackGate(true);
-  renderFileList();
-  if($('mapOverlay').checked){
-    // 换轨迹后旧底图与新轨迹不再对应：立即降级为无底图渲染，有 key 则自动重新拉取
-    window.mapOverlayState=null;
-    const key=($('amapKey').value||'').trim();
-    if(key){ onPreviewMapOverlay(); }
-    else { setMapStatus('填写高德 key 后自动加载底图','info'); }
-  }
-  render();
-  markOverlayNeedsRefresh();
-}
-function renderFileList(){
-  const el=$('fileList'); el.textContent='';
-  state.trackFiles.forEach((f,i)=>{
-    const row=document.createElement('div'); row.className='file-row';
-    const idx=document.createElement('span'); idx.className='file-idx'; idx.textContent=String(i+1);
-    const name=document.createElement('span'); name.className='file-name'; name.textContent=f.name; name.setAttribute('title',f.name);
-    const meta=document.createElement('span'); meta.className='file-meta'; meta.textContent=`${f.format} · ${f.points.length} 点`;
-    const btns=document.createElement('span'); btns.className='file-btns';
-    const upBtn=document.createElement('button');
-    upBtn.type='button'; upBtn.dataset.act='up'; upBtn.dataset.i=String(i); upBtn.textContent='↑';
-    upBtn.setAttribute('aria-label',`上移 ${f.name}`);
-    if(i===0) upBtn.disabled=true;
-    const downBtn=document.createElement('button');
-    downBtn.type='button'; downBtn.dataset.act='down'; downBtn.dataset.i=String(i); downBtn.textContent='↓';
-    downBtn.setAttribute('aria-label',`下移 ${f.name}`);
-    if(i===state.trackFiles.length-1) downBtn.disabled=true;
-    const delBtn=document.createElement('button');
-    delBtn.type='button'; delBtn.dataset.act='del'; delBtn.dataset.i=String(i); delBtn.textContent='✕';
-    delBtn.setAttribute('aria-label',`删除 ${f.name}`);
-    btns.appendChild(upBtn); btns.appendChild(downBtn); btns.appendChild(delBtn);
-    row.appendChild(idx); row.appendChild(name); row.appendChild(meta); row.appendChild(btns);
-    el.appendChild(row);
-  });
-}
-function trackFileAction(act,i){
-  if(act==='del'){
-    const removedFile=state.trackFiles[i];
-    state.trackFiles=reorderTrackFiles(state.trackFiles,act,i);
-    recomputeTrack();
-    if(removedFile) showTrackUndo(removedFile,i);
-    return;
-  }
-  clearTrackUndo();
-  state.trackFiles=reorderTrackFiles(state.trackFiles,act,i);
-  recomputeTrack();
-}
-function clearTrack(){
-  state.trackFiles=[]; state.trackPoints=null;
-  stopPreviewPlay();
-  $('previewScrub').style.display='none';
-  $('info').innerHTML='尚未载入轨迹';
-  $('expCard').disabled=true;
-  $('expDot').disabled=true;
-  $('expMp4').disabled=true;
-  setTrackGate(false);
-  renderFileList();
-  render();
-}
 const drop=$('drop');
 drop.onclick=()=>$('file').click();
 drop.addEventListener('keydown',e=>{
@@ -336,26 +77,6 @@ document.addEventListener('drop',e=>{
 });
 $('fileList').addEventListener('click',e=>{ const b=e.target.closest('button[data-act]'); if(b) trackFileAction(b.dataset.act,+b.dataset.i); });
 
-// 选项联动：field 范式 —— slider ↔ number 双向同步 + render；数值格式按 slider 的 step 小数位推导。
-const stepDecimals=step=>{ const s=String(step==null?'1':step); const i=s.indexOf('.'); return i<0?0:s.length-i-1; };
-const bind=(id,vid,after)=>{
-  const el=$(id), num=$(vid);
-  const decimals=stepDecimals(el.step);
-  const fmt=v=>decimals?(+v).toFixed(decimals):String(+v);
-  const fromSlider=()=>{ num.value=fmt(el.value); if(after)after(+el.value); render(); };
-  const fromNumber=()=>{
-    let v=parseFloat(num.value);
-    if(!Number.isFinite(v)) v=parseFloat(el.value);
-    v=Math.min(parseFloat(el.max),Math.max(parseFloat(el.min),v));
-    el.value=v; num.value=fmt(v);
-    if(after)after(v);
-    render();
-  };
-  el.addEventListener('input',fromSlider);
-  num.addEventListener('input',fromNumber);
-  num.addEventListener('change',fromNumber);
-  fromSlider();
-};
 bind('lineWidth','lineWidthV');
 bind('bgOpacity','bgOpacityV');
 bind('radius','radiusV');
@@ -366,20 +87,6 @@ bind('mapMaskOpacity','mapMaskOpacityV', v=>{ if(window.mapOverlayState) window.
 bind('mapViewScale','mapViewScaleV', v=>{ if(window.mapOverlayState) window.mapOverlayState.viewScale = v; });
 ['lineColor','bgColor','startColor','endColor','dotColor','showMarkers'].forEach(id=>$(id).addEventListener('input',render));
 
-// 颜色行右侧的 hex 灰字：文本恒等于对应 <input type="color"> 的当前值（大写）。
-function syncColorHexLabel(id){
-  const input=document.getElementById(id);
-  const out=document.querySelector('[data-hex-for="'+id+'"]');
-  if(!input||!out) return;
-  out.textContent=String(input.value||'').toUpperCase();
-}
-function initColorHexLabels(){
-  document.querySelectorAll('input[type=color]').forEach(input=>{
-    input.addEventListener('input',()=>syncColorHexLabel(input.id));
-    input.addEventListener('change',()=>syncColorHexLabel(input.id));
-    syncColorHexLabel(input.id);
-  });
-}
 initColorHexLabels();
 
 $('expCard').onclick=exportCard;

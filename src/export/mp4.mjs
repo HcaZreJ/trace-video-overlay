@@ -6,7 +6,8 @@ import { renderFrame } from '../render/card.mjs';
 import { state } from '../state.mjs';
 import { $ } from '../dom.mjs';
 import { exportState, setExportStatus, setExportKindLocked, showExportBlockedStatus } from './status.mjs';
-import { onPreviewMapOverlay, stopPreviewPlay } from '../main.mjs';
+import { onPreviewMapOverlay } from '../ui/map-panel.mjs';
+import { stopPreviewPlay } from '../ui/preview.mjs';
 
 const MP4_BITRATE={720:6e6,1080:12e6,1440:20e6};
 // 让出主线程：MessageChannel 宏任务没有 setTimeout 的 4ms 钳制，后台标签页也不被节流

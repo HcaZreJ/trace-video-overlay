@@ -5,7 +5,7 @@ import { renderDot } from '../render/dot.mjs';
 import { state, CARD_SIZE } from '../state.mjs';
 import { $ } from '../dom.mjs';
 import { exportState, setExportStatus, showExportBlockedStatus } from './status.mjs';
-import { onPreviewMapOverlay } from '../main.mjs';
+import { onPreviewMapOverlay } from '../ui/map-panel.mjs';
 
 function download(canvas,filename,onDone){
   canvas.toBlob(blob=>{
