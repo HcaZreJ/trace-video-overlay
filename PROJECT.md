@@ -10,7 +10,9 @@
 |---|---|
 | 多格式轨迹解析（GPX / KML / TCX / FIT / GeoJSON / CSV） | 已上线 |
 | 多轨迹文件按拖入顺序首尾相连（列表重排 + 拼接 + 删除撤销） | 已上线 |
-| 工作台 UI（sticky 预览 + 四个任务分区 + 吸底导出条 + 空状态引导 + 示例轨迹按钮） | 已上线 |
+| 工作台 UI（sticky 预览舞台 + 右列「① 轨迹 → ② 样式 → ③ 导出」三步流程 + 吸底导出条） | 已上线 |
+| 空状态：②③ 收起成置灰标题行、吸底条不渲染，入口只剩 drop 区 / 画布点击 / 示例轨迹链接 | 已上线 |
+| 导出产物切换（贴图 PNG / 动画 MP4 两个参数面板，主按钮随之切换，选择存 localStorage） | 已上线 |
 | 透明卡片 PNG 导出（分辨率 720 / 1080 / 1440 与 MP4 共用，样式可调，成功 toast） | 已上线 |
 | 定位点（预览实时叠加 + 通过按钮导出高清 PNG；尺寸语义 = 彩色核直径，dotGeometry 统一几何） | 已上线 |
 | 动画预览扫拨条（拖动 / 播放定位点沿线路运动，时长与 MP4 联动） | 已上线 |
@@ -34,6 +36,6 @@
 |---|---|
 | `core.mjs` | 纯函数权威实现：墨卡托投影、GCJ-02 转换、高德静图参数与对齐数学、轨迹平滑 / 拼接 / 指标、GeoJSON 与文本坐标提取、进度插值、定位点几何（dotGeometry）、MP4 参数合法化（clampMp4Duration） |
 | `fit.mjs` | FIT 二进制解析 |
-| `index.html` | 工作台 UI（sticky 预览舞台 + 四个分区的控件列 + 吸底导出条）、文件载入与撤销、Canvas 渲染（renderCard / renderDot / renderFrame）、动画预览播放、高德底图 fetch 与错误诊断、MP4 导出管线（含取消与关页拦截）；内联持有 core.mjs 逻辑的同步副本 |
+| `index.html` | 工作台 UI（sticky 预览舞台 + 三步流程的控件列 + 吸底导出条）、文件载入与撤销、Canvas 渲染（renderCard / renderDot / renderFrame）、动画预览播放、高德底图 fetch 与错误诊断、MP4 导出管线（含取消与关页拦截）；内联持有 core.mjs 逻辑的同步副本 |
 | `mp4-muxer.js` | vendored MP4 封装库 |
 | `tests/` | harness 盲测（visible / hidden 分离） |
