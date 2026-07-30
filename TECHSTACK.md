@@ -9,7 +9,9 @@
 - GitHub Pages 对 `.mjs` 返回 `content-type: text/javascript; charset=utf-8`，
   ES module 生产可用，零服务器配置。
 - Node.js（v22+）仅用于跑测试：内置 `node:test` + `node:assert/strict`，无测试框架依赖。
-  `src/core/` 与 `src/parse/`（`xml.mjs` 除外）零浏览器 API，Node 直接 import。
+  `src/core/` 全部、以及 `src/parse/` 的 `fit` · `geojson` · `csv` 零浏览器 API，
+  Node 直接 import 并单测。`src/parse/xml.mjs` 收一个已解析的 `Document`，
+  单测它需要提供 DOM 实现；`src/parse/index.mjs` 收 `File` 并调 `DOMParser`，属浏览器运行时。
 
 ## 依赖
 - npm 依赖：零。

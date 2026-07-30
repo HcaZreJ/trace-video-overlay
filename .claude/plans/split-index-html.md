@@ -86,8 +86,8 @@ src/
                                · onPreviewMapOverlay · updateBgModeUI · updateMapModeFieldsUI
     preview.mjs                render · previewPlayStep · startPreviewPlay · stopPreviewPlay
                                · updatePreviewScrubLabel
-    controls.mjs               syncColorHexLabel · initColorHexLabels · range↔number 联动
-                               · amapKey 持久化
+    controls.mjs               syncColorHexLabel · initColorHexLabels · bind（range↔number 联动）
+                               · stepDecimals
     color-picker/
       index.mjs                state · openPicker · closePicker · initColorPickers
                                · applyState · syncFromRgb · syncFromHsv
@@ -417,15 +417,16 @@ tests/
 
 - id: T8
   title: UI 层抽出为 src/ui/
-  file_path: src/ui/{dom,state,track-errors,track-panel,map-panel,preview,controls}.mjs,
-             src/main.mjs
+  file_path: src/ui/{track-errors,track-panel,map-panel,preview,controls}.mjs,
+             src/main.mjs, src/export/{png,mp4}.mjs
   functions:
     - name: UI 层切分
       behavioral_contract: |
-        按目标构成表切分。state.mjs 是应用状态与常量的单一持有者，其余模块从它读写；
-        dom.mjs 提供 $ · bind · stepDecimals 与拖放绑定；
-        其余四个模块各管一块面板。函数体逐字不动。
+        preview · map-panel · track-panel · track-errors · controls 五个模块各管一块面板，
+        函数体逐字不动。`bind` 与 `stepDecimals` 归 controls.mjs；
+        拖放绑定与 amapKey 持久化留在 main.mjs 的装配段。
         main.mjs 收缩为「import + 事件绑定 + 首屏初始化」。
+        （state.mjs 与 dom.mjs 已由 T3a 落在 src/ 顶层。）
   dependencies: [T7]
   reuse_candidates: 不适用，纯切割。
   acceptance: |
@@ -460,7 +461,7 @@ tests/
   reuse_candidates: 不适用。
   acceptance: |
     `node --test 'tests/**/*.test.mjs'` 一条命令跑出全量测试全绿，
-    数量等于 T0 交付后的实测基线；仓库根目录不再有 *.test.mjs。
+    数量为 635（T0 后的 634 加上 T7 新增的那条反向依赖断言）；仓库根目录不再有 *.test.mjs。
 
 - id: T11
   title: 文档全面更新，推翻单文件与 file:// 前提
@@ -555,9 +556,10 @@ T1–T11 是行为零变化的搬迁，spec 就是「搬完之后既有 572 个�
 **按行号切割，不手抄。** 每个搬迁单元用 `sed -n '<start>,<end>p'` 取源码段，
 再补 `import` / `export`。
 
-**函数体文本改动只发生在 T3a。** 那一个单元把 4 个跨层共享状态收进 state 对象、
-把 `$` 改为导入，改动面是两类可枚举的机械替换。T3a 之后的每个单元重新回到
-「只搬不改」，函数体逐字符守恒。
+**函数体文本改动只发生在两处，都是同一个原因。** ES module 的导入绑定只读，
+跨模块共读共写的状态必须挂到对象属性上，于是：T3a 把 4 个跨层状态收进 `state`
+（外加 `$` 改为导入），T7 把 `exportForceNoBasemap` 收进 `exportState`（3 个函数体、6 处）。
+两处的改动面都可逐处枚举。其余每个单元都是「只搬不改」，函数体逐字符守恒。
 
 **守恒校验。** 每个搬迁单元交付时附带校验：把新模块的函数体与源文件对应行号段做 `diff`，
 除 `import` / `export` 关键字外应为空。CSS 单元的校验是六个文件按 `<link>` 顺序拼接后
@@ -566,12 +568,19 @@ T1–T11 是行为零变化的搬迁，spec 就是「搬完之后既有 572 个�
 **测试是行为不变的唯一判据。** 现有测试的断言主体逐字不动，只改取材来源与 import 路径 ——
 断言主体的 diff 为空是每个单元的验收项。
 
+**目标态断言可以先红着落地。** 当某个单元造成的结构缺陷要由后一个单元消除时，
+把「消除后才成立」的那条不变量写成断言先行提交，让它红着。这比在 BACKLOG 里记一条
+待办有强制力：后一个单元的验收标尺就是它转绿，且不许改测试。
+本 plan 用了两次 —— T2 前把 uiStructure 的三条装载形态断言翻转为目标态，
+T7 后加「没有任何模块反向导入入口 main.mjs」逼 T8 消掉环。
+代价是这两个单元交付时全量测试不是满绿；判据相应改为「失败集合恰好等于那几条目标态断言」。
+
 **手工流程是渲染与网络路径的判据。** 静态断言测不到 canvas 像素与 fetch 行为，
 T2 · T5 · T6 · T7 · T9 各自的 acceptance 里写明该单元必须手测的路径。
 
 ## Status
 
-Completed —— 14 个工作单元全部交付并验收，15 个 commit 落在分支 `worktree-split-index-html`。
+Completed —— 14 个工作单元全部交付并验收，落在分支 `worktree-split-index-html`。
 
 终态：`index.html` 2550 → 295 行（零 `<style>`、零内联逻辑）；`src/` 下 33 个模块，
 最大 193 行；仓库里零重复算法定义；零模块反向导入入口；

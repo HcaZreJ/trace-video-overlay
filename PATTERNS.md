@@ -7,7 +7,7 @@
 | 层 | 边界 |
 |---|---|
 | `src/core/` | 零浏览器 API 的纯函数。Node 直接 import 单测，浏览器 import 同一份。 |
-| `src/parse/` | 按轨迹格式分家，`index.mjs` 按扩展名分派。`xml.mjs` 依赖浏览器 `DOMParser`，因而是这一层里唯一 Node 下不可单测的模块。 |
+| `src/parse/` | 按轨迹格式分家。`index.mjs` 是这一层里唯一绑浏览器的模块：它收 `File`、调 `file.arrayBuffer()` / `file.text()` 与 `new DOMParser()`，再按扩展名分派。`fit` · `geojson` · `csv` 收字节或字符串，`xml` 收一个已解析的 `Document`，四者都不碰全局对象。 |
 | `src/basemap/` | 高德静图的网络与图片解码。不碰界面 DOM；结果经返回值或带 `code` 的 `Error` 交给 ui 层。 |
 | `src/render/` | 收 canvas 作画。从 `state` 读轨迹与进度、用 `$` 读控件当前值，不写 DOM、不绑事件、不改 state。 |
 | `src/export/` | 产物出口：PNG 下载、MP4 编码管线、导出状态条。与 `ui` 互相调用，见「依赖方向」。 |

@@ -1,5 +1,6 @@
 // ==================== XML 系（GPX / TCX / KML）坐标提取 ====================
-// 三个提取器接收 DOMParser 产出的 Document，属浏览器运行时，Node 下无 DOMParser。
+// 三个提取器接收一个已解析的 Document（由 index.mjs 的 DOMParser 产出），自身不碰全局对象；
+// 在 Node 下单测它们需要提供一份 DOM 实现。
 function ptFromAttrEl(el){
   const lat=parseFloat(el.getAttribute('lat')),lon=parseFloat(el.getAttribute('lon'));
   if(isNaN(lat)||isNaN(lon)) return null;
