@@ -1,12 +1,48 @@
 # PATTERNS
 
-## 模块边界：core.mjs 权威 + index.html 内联同步
-- 纯几何/解析/字符串构造函数写进 `core.mjs`（具名 `export function`），由 node:test 覆盖。
-- 涉及 fetch / DOM / Canvas / Image 的浏览器运行时逻辑只写在 `index.html` 内联 script。
-- `core.mjs` 中被 `index.html` 使用的函数，必须**逐字符**同步进内联 script
-  （内联副本为普通函数声明，去掉 `export` 关键字），并在内联区用
-  `/* ==================== 分区标题（core.mjs 权威，已 node:test 覆盖） ==================== */`
-  banner 标注归属。
+## 分层
+
+六层加两个叶子模块，`src/main.mjs` 是装配入口。
+
+| 层 | 边界 |
+|---|---|
+| `src/core/` | 零浏览器 API 的纯函数。Node 直接 import 单测，浏览器 import 同一份。 |
+| `src/parse/` | 按轨迹格式分家，`index.mjs` 按扩展名分派。`xml.mjs` 依赖浏览器 `DOMParser`，因而是这一层里唯一 Node 下不可单测的模块。 |
+| `src/basemap/` | 高德静图的网络与图片解码。不碰界面 DOM；结果经返回值或带 `code` 的 `Error` 交给 ui 层。 |
+| `src/render/` | 收 canvas 作画。从 `state` 读轨迹与进度、用 `$` 读控件当前值，不写 DOM、不绑事件、不改 state。 |
+| `src/export/` | 产物出口：PNG 下载、MP4 编码管线、导出状态条。 |
+| `src/ui/` | 唯一写界面 DOM、绑事件的一层。 |
+| `src/state.mjs` | 跨层共享的可变状态与 `CARD_SIZE`。叶子，零导入。 |
+| `src/dom.mjs` | `$` 取元素。叶子，零导入。 |
+
+`src/main.mjs` 只装 import、事件绑定、首屏初始化。
+
+## 依赖方向
+
+跨层单向向下：`ui → export → render → core`、`ui → basemap → core`、`parse → core`，
+各层都可以导入 `state` 与 `dom` 两个叶子。
+
+没有任何模块导入入口 `src/main.mjs` —— 这条由 `tests/hidden/uiStructure.test.mjs` 盯着。
+
+同层的兄弟模块之间存在互相调用：`ui/map-panel ↔ ui/preview`（重绘失败要报状态、
+底图拉取完成要重绘）、`ui/track-panel ↔ ui/track-errors`（撤销按钮触发重算、载入失败弹提示）、
+`ui/color-picker/` 四个模块构成一个强连通分量（输入框与指针回调就是状态同步链路本身）。
+这些是面板间的控制回调，ESM 对提升的函数声明支持这种形态；跨层依赖仍严格单向。
+
+## 跨模块状态
+
+ES module 的导入绑定是只读的，所以多个模块共读共写的状态一律挂在导出的对象上：
+
+- `state`（`src/state.mjs`）—— `trackFiles` · `trackPoints` · `previewProgress`
+  · `mapOverlayNeedsRefresh`，被 ui / render / export 三层共用。
+- `exportState`（`src/export/status.mjs`）—— `forceNoBasemap`，「改用无底图导出」这条路径上
+  status 写、png 与 mp4 读并消费。
+- `pickerState`（`src/ui/color-picker/index.mjs`）—— 取色器自身的界面状态，
+  在定义它的模块内以 `state` 之名使用，跨模块以 `pickerState` 之名导出以免与应用状态混淆。
+- `window.mapOverlayState` —— 地图 overlay 运行时状态，挂 window 便于浏览器控制台手测。
+
+只服务单一模块的可变量用普通 `let` 留在那个模块里（如 `mp4CancelRequested`
+之于 `export/mp4.mjs`、`mapFetchInFlight` 之于 `ui/map-panel.mjs`）。
 
 ## 命名
 - 函数/变量 camelCase；真常量 SCREAMING_SNAKE_CASE（如 `AMAP_STATIC_ZOOM_BIAS`、`GCJ_EE`）。
@@ -17,13 +53,15 @@
 - 参数校验抛原生 `TypeError`（类型/结构错）或 `RangeError`（值域错），消息以函数名前缀：
   `throw new RangeError('computeAmapView: sizePx must be a positive number')`。
 - 语义上「无数据」的指标函数返回 `null`（如 `trackDurationSec`）；解析失败才抛错。
-- 浏览器侧网络失败 reject 带 `code` 字段的 `Error`（如 `'fetch_failed'`），UI 层据此提示并降级。
+- 浏览器侧网络失败 reject 带 `code` 字段的 `Error`（如 `'amap_api_error'`），
+  ui 层据此分支提示并降级。用户可见文案是中文人话，`Error.code` 供程序判别。
 
 ## 渲染
 - 一切卡片渲染以 `CARD_SIZE = 600` 为基准；其它分辨率按 `scale = size/CARD_SIZE`
   等比缩放全部样式参数（pad/lineWidth/radius/markerSize/dotSize）。
-- `renderCard`（DOM 驱动，预览+PNG）与 `renderFrame`（opts 驱动，MP4 逐帧）保持同构逻辑；
-  改渲染行为时两处同步。
+- `renderCard`（读控件取值，服务预览与 PNG）与 `renderFrame`（收 opts 对象，服务 MP4 逐帧）
+  画同一幅画，同处 `src/render/card.mjs`；改渲染行为时两处同步。
+  取参形态不同：`buildFrameOpts()` 把控件取值快照成 opts，让逐帧渲染与 DOM 解耦。
 - 尺寸滑块语义统一为「彩色核直径」（600 基准像素）：起终点标记 `r=size/2`，定位点几何
   全部由 `dotGeometry(size)` 导出（coreR/ringW/outerR/pad/full/阴影），同数值 → 彩色核同大；
   渲染层出现定位点的三处（renderCard 预览、renderFrame、renderDot）统一走 dotGeometry。
@@ -43,6 +81,16 @@
 - 内部维护 `currentRgb` + `currentHsv` 双份状态：SV 面板与色相条要求连续浮点 hue
   与 s/v，输入框展示要求整数 RGB/HSL；灰阶（`hsv.s === 0`）时保留旧 hue，避免光标
   跳回 0。
+
+## 样式组织
+
+`styles/` 六个文件按 `<link>` 顺序拼接即浏览器看到的层叠顺序，所以文件内与文件间的
+规则顺序都有语义：`tokens`（`:root` 变量）→ `base`（reset · body · header · focus-visible）
+→ `layout`（workspace 栅格 · drop 区 · 舞台 · 步骤结构 · gate 态 · 断点）
+→ `forms`（input · select · range · val · check · segmented）
+→ `components`（keyhelp · 按钮 · 吸底导出条 · 状态按钮 · 文件列表）
+→ `color-picker`（`.cp-*`，与 `src/ui/color-picker/` 成对）。
+新增规则放进它所属主题的那个文件。
 
 ## UI 结构（工作台）
 - 布局 = 左列 sticky 预览舞台（卡片 canvas + 动画扫拨行 + 轨迹摘要行）+ 右列三个步骤
@@ -65,8 +113,7 @@
 - 颜色参数一律 `.color-row` 范式：左 label + 右 28×28 swatch + `data-hex-for` 的 12px 灰字
   hex 值，起点终点两行装进 `.color-pair` 同行显示。
 - 状态反馈：导出类消息走吸底条的 `#exportStatus`（成功 ✓ 6s 自清，失败 ✕ 持久），地图链
-  消息走 ② 区 `#mapOverlayStatus`，两者均 `aria-live="polite"`；用户可见报错为中文人话，
-  内部 `Error.code` 供程序分支。
+  消息走 ② 区 `#mapOverlayStatus`，两者均 `aria-live="polite"`。
 - gate：`setTrackGate(hasTrack)` 切 `body.has-track`，并对每个 `[data-gate]` 切 `needs-track`
   + `inert` + `aria-disabled`。未载入轨迹时 `.step-body` 收起、区标题降到 45%、吸底条整条
   `display:none`，页面上只剩 drop 区 / 画布点击 / 示例轨迹链接三个入口，三者是同一个动作。
@@ -74,10 +121,18 @@
 
 ## 测试
 - Node 内置 `node:test` + `node:assert/strict`，零框架。
+- `tests/unit/` 覆盖 core 与 parse 的纯逻辑。
 - harness 单元走 `tests/visible/`（少量样例，实现 agent 可见）+ `tests/hidden/`
   （全面用例，实现 agent 仅见跑分）双文件盲测。
+- UI 测试断言的对象是「浏览器最终装载到的 CSS 与 JS」，取材统一走
+  `tests/helpers/source.mjs`：`readCss()` 按 `<style>` 块与 `<link>` 在文档中的先后顺序拼接，
+  `readJs()` 取内联 `<script>` 加 `src/` 下全部 `.mjs`，`readAll()` 供「某段内容已彻底删除」
+  这类断言使用。样式或脚本换了文件归属时只改这一处。
 - 浮点断言用容差比较；已知锚定值由公式手工推导写死。
+- canvas 与网络这类静态断言够不着的行为，靠无头 Chrome + iframe harness + CDP
+  `Runtime.evaluate` 实测；渲染改动用像素签名（非透明像素数 + FNV-1a + 采样点 RGBA）比对。
 
 ## 刻意省略的设计
-- 无 build 工具、无框架、无 TypeScript、无 npm 依赖——`index.html` 打开即用是产品约束。
+- 无 build 工具、无框架、无 TypeScript、无 npm 依赖——GitHub Pages 从 `main` 根目录
+  直接托管源码是产品约束。
 - 无后端、无数据库；唯一网络请求（高德静图）是用户 opt-in 的运行时行为。

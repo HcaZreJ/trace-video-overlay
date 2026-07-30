@@ -32,10 +32,29 @@
   DOM 解耦。
 
 ## 模块地图
+
+分层与依赖方向见 [PATTERNS.md](PATTERNS.md)。33 个模块，每个 200 行以内。
+
 | 模块 | 职责 |
 |---|---|
-| `core.mjs` | 纯函数权威实现：墨卡托投影、GCJ-02 转换、高德静图参数与对齐数学、轨迹平滑 / 拼接 / 指标、GeoJSON 与文本坐标提取、进度插值、定位点几何（dotGeometry）、MP4 参数合法化（clampMp4Duration） |
-| `fit.mjs` | FIT 二进制解析 |
-| `index.html` | 工作台 UI（sticky 预览舞台 + 三步流程的控件列 + 吸底导出条）、文件载入与撤销、Canvas 渲染（renderCard / renderDot / renderFrame）、动画预览播放、高德底图 fetch 与错误诊断、MP4 导出管线（含取消与关页拦截）；内联持有 core.mjs 逻辑的同步副本 |
-| `mp4-muxer.js` | vendored MP4 封装库 |
-| `tests/` | harness 盲测（visible / hidden 分离） |
+| `index.html` | HTML 结构骨架：六条样式 `<link>` + 第三方库与 module 入口两条 `<script>` |
+| `styles/` | `tokens` · `base` · `layout` · `forms` · `components` · `color-picker` 六份，按 `<link>` 顺序层叠 |
+| `src/main.mjs` | 装配入口：import、事件绑定、首屏初始化 |
+| `src/state.mjs` | 跨层共享的可变状态（轨迹文件与派生点、预览进度、底图待刷新标记）与 `CARD_SIZE` |
+| `src/dom.mjs` | `$` 取元素 |
+| `src/core/geo.mjs` | 墨卡托投影、Catmull-Rom 平滑、画布投影、总里程、沿弧长的进度插值 |
+| `src/core/gcj02.mjs` | WGS84 → GCJ-02（国测局公式） |
+| `src/core/amap.mjs` | 高德静图的像素换算、取景计算、URL 构造、轨迹与底图对齐 |
+| `src/core/metrics.mjs` | 时长、均速、配速、爬升与其格式化 |
+| `src/core/color.mjs` | HEX / RGB / HSL / HSV 互转 |
+| `src/core/track-files.mjs` | 多文件首尾拼接、列表重排 |
+| `src/core/export-params.mjs` | 定位点几何 `dotGeometry`、MP4 时长夹取 `clampMp4Duration` |
+| `src/parse/` | `index` 按扩展名分派 → `fit` · `geojson` · `csv` · `xml`（GPX/TCX/KML，依赖 DOMParser） |
+| `src/basemap/` | `diagnose` 高德错误码翻译 · `image` Blob 与 URL 两条解码路径 · `fetch` 取图与内存缓存 |
+| `src/render/` | `primitives` 描边与标记 · `card` renderCard 与 renderFrame · `dot` 定位点 |
+| `src/export/` | `status` 产物切换与状态条 · `png` 卡片与定位点下载 · `mp4` WebCodecs 编码管线 |
+| `src/ui/` | `preview` 重绘编排与动画播放 · `map-panel` 底图交互 · `track-panel` 轨迹列表 · `track-errors` 失败提示与撤销 · `controls` 滑杆联动 · `color-picker/` 四个模块 |
+| `vendor/mp4-muxer.js` | 第三方 MP4 封装库，classic script 挂 `window.Mp4Muxer` |
+| `tests/unit/` | core 与 parse 纯逻辑的单测 |
+| `tests/visible/`、`tests/hidden/` | harness 盲测（实现 agent 只见 hidden 跑分） |
+| `tests/helpers/source.mjs` | UI 测试的取材单一入口 |

@@ -87,9 +87,11 @@
 - [x] T10 测试收拢单一入口（架构师亲做）   file: tests/unit/{core,fit}.test.mjs
         deps: T9   验收: 一条命令跑出 635 个全绿 ✅；根目录无 *.test.mjs ✅；
               harness 的 run-hidden-tests.sh 不受影响（geojsonCoords 81/81）✅
-- [ ] T11 文档全面更新       file: AGENTS.md, PROJECT.md, PATTERNS.md, TECHSTACK.md, DEVFLOW.md, README.md
-        deps: T10  验收: 六份文档无 file:// / 双击 / 单文件 / 副本 / 抄；命令实测通过；
-              目录结构与 ls 一致
+- [x] T11 文档全面更新（架构师亲做）  file: AGENTS.md, PROJECT.md, PATTERNS.md, TECHSTACK.md,
+                                            DEVFLOW.md, README.md
+        deps: T10  验收: 旧形态词零命中 ✅；文档提到的每条路径实际存在 ✅；
+              TECHSTACK 目录树与实际 ls 双向核对无遗漏 ✅；DEVFLOW 每条命令实测通过 ✅；
+              635 测试仍全绿 ✅
 
 ### 全部完成后
 
