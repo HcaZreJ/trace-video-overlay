@@ -1,0 +1,38 @@
+  .keyhelp{margin-top:8px;font-size:12px;color:var(--dim)}
+  .keyhelp summary{cursor:pointer;color:var(--fg)}
+  .keyhelp ol{margin:8px 0 4px;padding-left:18px}
+  .keyhelp li{margin-bottom:4px}
+  .keyhelp small{display:block;margin-top:6px}
+  .privacy-note{display:block;color:var(--dim);font-size:12px;margin:10px 0 0}
+  .btns{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+  button.exp{padding:11px;border:none;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;
+    background:var(--accent-strong);color:#fff;transition:.15s}
+  button.exp:hover{filter:brightness(1.1)}
+  button.exp.sec{background:#2a2f37;color:var(--fg)}
+  button.exp:disabled{opacity:.4;cursor:not-allowed}
+  .export-actions{position:sticky;bottom:12px;display:flex;flex-direction:column;gap:8px;padding:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 -8px 20px -10px rgba(0,0,0,.6);z-index:5}
+  .export-actions #exportStatus{margin:0;padding:0;border-top:none}
+  .export-actions-buttons{display:flex;gap:10px}
+  .export-actions-buttons button{flex:1;margin:0;white-space:nowrap;padding-left:8px;padding-right:8px}
+  @media(max-width:760px){.export-actions-buttons{flex-wrap:wrap}.export-actions-buttons button{flex:1 1 45%}}
+  .status-btn{display:inline-block;width:auto;margin:8px 8px 0 0;padding:5px 10px;
+    font-size:12px;border:1px solid var(--line);border-radius:6px;background:#2a2f37;color:var(--fg);cursor:pointer}
+  .status-btn:hover{filter:brightness(1.15)}
+  .hint{font-size:12px;color:var(--dim);margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
+  .hint b{color:var(--fg)}
+  .file-list{margin:0 0 var(--sp-field)}
+  .file-row{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:13px}
+  .file-idx{width:18px;color:var(--dim);text-align:center;flex-shrink:0}
+  .file-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file-meta{color:var(--dim);flex-shrink:0;font-size:12px}
+  .file-btns{display:flex;gap:4px;flex-shrink:0}
+  .file-btns button{width:32px;height:32px;border:none;border-radius:6px;background:var(--line);
+    color:var(--fg);cursor:pointer;font-size:13px;line-height:1;transition:.15s}
+  .file-btns button:not(:disabled):hover{background:#2a2f37}
+  .file-btns button[data-act="del"]:not(:disabled):hover{background:#ff453a;color:#fff}
+  .file-btns button:disabled{opacity:.35;cursor:not-allowed}
+  @media(max-width:760px){.file-btns button{width:40px;height:40px}}
+  input[type=file]{display:none}

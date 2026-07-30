@@ -1,5 +1,8 @@
 # Feature: 骑行轨迹 → 剪辑用透明贴图导出（方案 B）
 
+> 本 plan 已完成，作为设计记录保留。仓库现为按层分模块的多文件结构，
+> 代码位置与仓库级规则以 [AGENTS.md](../../AGENTS.md) 与 [PATTERNS.md](../../PATTERNS.md) 为准。
+
 ## Overview
 把一次骑行的 GPX/KML/TCX/FIT/GeoJSON 轨迹渲染成剪辑软件（剪映）能用的角落贴图素材：
 一张 600×600 的透明 PNG 地图卡片（半透明圆角底 + 线路 + 起终点标记），

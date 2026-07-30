@@ -2,16 +2,25 @@
 
 ## 语言与运行时
 - 纯前端 vanilla JavaScript（ES2015+），无框架、无 TypeScript、无 build 步骤、无 package.json。
-- 浏览器直接运行 `index.html`（file:// 或任意静态服务器）。
+- 应用代码是原生 ES module（`.mjs`，具名导出），页面经
+  `<script type="module" src="src/main.mjs">` 装载。module 的隐式 defer 保证执行时 DOM 已就位。
+- 页面经 HTTP 打开：ES module 的 import 要求 HTTP(S) 协议。
+  本地开发起 `python3 -m http.server 8137`。
+- GitHub Pages 对 `.mjs` 返回 `content-type: text/javascript; charset=utf-8`，
+  ES module 生产可用，零服务器配置。
 - Node.js（v22+）仅用于跑测试：内置 `node:test` + `node:assert/strict`，无测试框架依赖。
-- `.mjs` 文件为原生 ES module（具名导出）；`index.html` 内联 script 为普通 script（非 module）。
+  `src/core/` 全部、以及 `src/parse/` 的 `fit` · `geojson` · `csv` 零浏览器 API，
+  Node 直接 import 并单测。`src/parse/xml.mjs` 收一个已解析的 `Document`，
+  单测它需要提供 DOM 实现；`src/parse/index.mjs` 收 `File` 并调 `DOMParser`，属浏览器运行时。
 
 ## 依赖
 - npm 依赖：零。
-- Vendored：`mp4-muxer.js`（Vanilagy/mp4-muxer 的 bundled IIFE 构建，暴露全局 `Mp4Muxer`），
-  经 `<script src="mp4-muxer.js">` 加载。
+- Vendored：`vendor/mp4-muxer.js`（Vanilagy/mp4-muxer 的 bundled IIFE 构建，暴露全局
+  `Mp4Muxer`），经 `<script src="vendor/mp4-muxer.js">` 以 classic script 加载，
+  排在 module 入口之前，保证 `window.Mp4Muxer` 先就位。
 - 浏览器能力依赖：Canvas 2D、WebCodecs（`VideoEncoder`/`VideoFrame`，MP4 导出用，
-  `mp4Supported()` 做能力检测）、`localStorage`、File API（拖拽/多选）、`Image` 加载。
+  `mp4Supported()` 做能力检测）、`DOMParser`（GPX/TCX/KML 解析）、`localStorage`、
+  File API（拖拽/多选）、`Image` 加载、`EyeDropper`（取色器吸管，可选）。
 
 ## 外部服务
 - 唯一外部网络集成：高德静态地图 API `https://restapi.amap.com/v3/staticmap`
@@ -22,25 +31,45 @@
 
 ## 目录结构
 ```
-core.mjs            纯几何/解析/构造函数（权威实现，node:test 覆盖）
-core.test.mjs       core.mjs 的早期测试（根目录，与 tests/ 并存）
-fit.mjs             FIT 二进制解析模块
-fit.test.mjs        fit.mjs 测试
-index.html          整个应用：CSS + DOM + 内联 script（含 core.mjs 逻辑的内联副本）
-mp4-muxer.js        vendored MP4 muxer
-tests/visible/      harness 测试（实现 agent 可见）
-tests/hidden/       harness 测试（实现 agent 不可见，经脚本跑分）
+index.html                  HTML 结构 + 六条 <link> + 两条 <script>
+styles/
+  tokens.css                :root 设计变量
+  base.css                  reset · body · header · 示例入口 · focus-visible
+  layout.css                workspace 栅格 · drop 区 · 舞台 · 步骤结构 · gate 态 · 断点
+  forms.css                 input · select · range · val · check · segmented
+  components.css            keyhelp · 按钮 · 吸底导出条 · 状态按钮 · 文件列表
+  color-picker.css          .cp-*
+src/
+  main.mjs                  装配入口
+  state.mjs                 跨层共享状态 + CARD_SIZE
+  dom.mjs                   $ 取元素
+  core/                     geo · gcj02 · amap · metrics · color · track-files · export-params
+  parse/                    index · fit · geojson · csv · xml
+  basemap/                  diagnose · image · fetch
+  render/                   primitives · card · dot
+  export/                   status · png · mp4
+  ui/                       preview · map-panel · track-panel · track-errors · controls
+    color-picker/           index · popup · canvas · inputs
+vendor/
+  mp4-muxer.js              第三方 MP4 封装库
+tests/
+  unit/                     core.test.mjs · fit.test.mjs
+  visible/                  harness 测试（实现 agent 可见）
+  hidden/                   harness 测试（实现 agent 不可见，经脚本跑分）
+  helpers/source.mjs        UI 测试取材入口
+docs/demo-taihu.png         README 用的 demo 截图
 sample-ride.gpx / sample-route.gpx   手测样例数据
-.claude/plans/      跨 session 权威设计文档
-.claude/launch.json 本地开发服务配置（python3 -m http.server 8137）
+.claude/plans/              跨 session 权威设计文档
+.claude/launch.json         本地开发服务配置（python3 -m http.server 8137）
 ```
 
 ## 配置与环境变量
 - 应用运行时配置只有一处：高德 API Key，由用户在 UI 输入框填写，持久化于
-  `localStorage.amap_key`。
+  `localStorage.amap_key`。另有两项界面偏好也存 localStorage：`exportKind`（产物选择）、
+  `colorPickerMode`（取色器表达模式）。
 - 根目录 `.env`（git-ignored）存在但不被任何代码读取；应用无 `process.env` 消费路径。
 
 ## 部署
 - GitHub Pages 静态托管：https://hcazrej.github.io/trace-video-overlay/ （仓库 settings 配置，
-  无 in-repo CI/CD workflow）。
+  无 in-repo CI/CD workflow）。从 `main` 分支根目录直接发布源码，无构建产物。
 - 端口：本地开发 8137（launch.json）。

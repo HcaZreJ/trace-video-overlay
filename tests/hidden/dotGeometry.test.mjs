@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dotGeometry } from '../../core.mjs';
+import { dotGeometry } from '../../src/core/export-params.mjs';
 
 /**
  * 按 spec 公式计算 size 对应的期望几何字段：

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pointAtProgress } from '../../core.mjs';
+import { pointAtProgress } from '../../src/core/geo.mjs';
 
 /**
  * 断言 actual 是一个 {x,y} 均为数值、且与 expected 在给定容差内相等的点，

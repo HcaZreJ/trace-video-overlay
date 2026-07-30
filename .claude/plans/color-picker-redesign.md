@@ -1,5 +1,8 @@
 # Feature: 自定义 Color Picker（RGB/HSL/HEX 显式分段 + 状态保留）
 
+> 本 plan 已完成，作为设计记录保留。仓库现为按层分模块的多文件结构，
+> 代码位置与仓库级规则以 [AGENTS.md](../../AGENTS.md) 与 [PATTERNS.md](../../PATTERNS.md) 为准。
+
 ## Overview
 弃用浏览器原生 `<input type="color">` popup（Chrome 内建，样式/状态不可控），
 自建一个零依赖的自定义 color picker：SV 面板 + 色相条 + HEX/RGB/HSL 三段 tab +
@@ -17,7 +20,7 @@
   读 hex 字符串；已用 `localStorage.amap_key` 存偏好。
 - **Constraints**：
   - 零依赖（AGENTS.md 铁律 3）；纯函数进 core.mjs 配 node:test（铁律 2）；
-  - core.mjs 公共函数须逐字符同步进 index.html 内联 script（铁律 1）；
+  - 纯函数归 src/core/，浏览器与 Node 导入同一份（AGENTS.md 铁律 2）；
   - 下游 `$('id').value` 与 `input`/`change` 事件语义保持兼容；
   - 复用现有 `.segmented > .seg-opt.active` 分段控件样式与 `--accent-strong` 强调色语义。
 - **Non-goals**：alpha 通道、颜色历史、预设色板、剪贴板粘贴、EyeDropper polyfill。
@@ -41,7 +44,7 @@
 - popup 内包含：SV 面板（canvas 拖动）、色相条、模式分段 tab（HEX/RGB/HSL）、数值输入、
   吸管（EyeDropper 可用时显示）、当前色预览；
 - `localStorage.colorPickerMode` 保存与恢复模式偏好，全局共享；
-- 从 core.mjs 逐字符同步纯函数到 index.html 内联 script（去 `export`）。
+- 颜色空间转换归 src/core/color.mjs，取色器模块直接 import。
 
 **I will not implement：**
 - alpha 透明度通道（底色不透明度已有独立 slider，不合并进 picker）；

@@ -1,0 +1,28 @@
+  input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
+    background:#0d0f12;color:var(--fg);font-size:13px}
+  input[type=text]:disabled{opacity:.4;cursor:not-allowed}
+  input[type=range]{width:100%}
+  select{width:100%;height:32px;padding:0 30px 0 10px;border:1px solid var(--line);border-radius:6px;
+    background-color:#0d0f12;color:var(--fg);font-size:13px;line-height:1;cursor:pointer;
+    appearance:none;-webkit-appearance:none;-moz-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a93a2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center}
+  select:disabled{opacity:.4;cursor:not-allowed}
+  .fieldrow{display:flex;align-items:center;gap:10px}
+  .fieldrow input[type=range]{flex:1;width:auto}
+  input.val{width:64px;height:32px;padding:0 6px;border:1px solid var(--line);border-radius:6px;
+    background:#0d0f12;color:var(--fg);font-size:13px;text-align:right}
+  input.val:disabled{opacity:.4;cursor:not-allowed}
+  input.val,#info,#mp4ProgressV,.file-meta{font-variant-numeric:tabular-nums}
+  .row{display:flex;gap:10px}
+  .row .field{flex:1}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:var(--sp-field)}
+  .segmented{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:var(--sp-field)}
+  .seg-opt{position:relative;flex:1;display:flex;align-items:center;justify-content:center;padding:9px 0;
+    font-size:13px;color:var(--fg);cursor:pointer;background:#0d0f12;transition:.15s;user-select:none}
+  .seg-opt:not(:last-child){border-right:1px solid var(--line)}
+  .seg-opt input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+  .seg-opt.active{background:#39404d;color:#fff}
+  .seg-opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+  .seg-opt:has(input:disabled){opacity:.45;cursor:not-allowed}
+  @media(max-width:760px){.check{padding:10px 0}.seg-opt{padding:12px 0}}

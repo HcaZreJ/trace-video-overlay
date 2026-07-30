@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { ROOT, readCss, readJs, readInlineScripts, listAppModulePaths } from '../helpers/source.mjs';
 
 /* ==================== index.html 三段切分（style / body HTML / 内联 script） ==================== */
 
@@ -11,18 +13,6 @@ const SRC = readFileSync(INDEX_PATH, 'utf8');
 /** 连续空白折叠成单空格并裁剪两端，让断言对换行与缩进宽容。 */
 const collapse = s => s.replace(/\s+/g, ' ').trim();
 
-/** 取全部 <style>…</style> 里的 CSS。 */
-function extractCss(src) {
-  return [...src.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
-}
-
-/** 取内联 <script>（不带 src 属性的那些；<script src="mp4-muxer.js"> 是外部引用）。 */
-function extractInlineScripts(src) {
-  return [...src.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
-    .filter(m => !/\bsrc\s*=/.test(m[1]))
-    .map(m => m[2]);
-}
-
 /** 取 <body>…</body> 内的标记，剔除 <script> 段，只留 HTML。 */
 function extractBodyHtml(src) {
   const m = src.match(/<body\b[^>]*>([\s\S]*?)<\/body>/);
@@ -30,9 +20,9 @@ function extractBodyHtml(src) {
   return m[1].replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
 }
 
-const CSS = extractCss(SRC);
-const INLINE_SCRIPTS = extractInlineScripts(SRC);
-const JS = INLINE_SCRIPTS.join('\n');
+const CSS = readCss();
+const INLINE_SCRIPTS = readInlineScripts(SRC);
+const JS = readJs();
 const HTML = extractBodyHtml(SRC);
 
 /* ==================== HTML / JS 抽取小工具 ==================== */
@@ -114,18 +104,20 @@ const BASELINE_IDS = collapse(`
 
 /* ==================== 0 · 切分自检 ==================== */
 
-test('uiStructure: index.html 切成 style / body HTML / 内联 script 三段', () => {
-  assert.ok(CSS.length > 500, `<style> 段应当非空，实际长度 ${CSS.length}`);
+test('uiStructure: 样式 / 结构 / 应用逻辑三段齐备，装载顺序正确', () => {
+  assert.ok(CSS.length > 500, `样式段应当非空，实际长度 ${CSS.length}`);
   assert.ok(HTML.length > 500, `<body> 段应当非空，实际长度 ${HTML.length}`);
-  assert.equal(INLINE_SCRIPTS.length, 1, '页面应当只有一段内联 script');
-  assert.ok(JS.length > 5000, `内联 script 应当非空，实际长度 ${JS.length}`);
+  assert.equal(INLINE_SCRIPTS.length, 0, 'index.html 应当不含内联应用逻辑');
+  assert.ok(JS.length > 5000, `应用 JS 应当非空，实际长度 ${JS.length}`);
   assert.ok(!/<script\b/.test(HTML), 'HTML 段里不应当残留 <script> 标记');
 
-  const muxerAt = SRC.indexOf('<script src="mp4-muxer.js">');
-  assert.ok(muxerAt > -1, 'mp4-muxer.js 应当以外部 script 引入');
+  const muxerAt = SRC.indexOf('<script src="vendor/mp4-muxer.js">');
+  assert.ok(muxerAt > -1, 'mp4-muxer.js 应当以外部 classic script 从 vendor/ 引入');
+  const entryAt = SRC.search(/<script\b[^>]*\btype\s*=\s*["']module["'][^>]*>/);
+  assert.ok(entryAt > -1, '应用入口应当是 <script type="module">');
   assert.ok(
-    SRC.indexOf(JS.slice(0, 80)) > muxerAt,
-    '内联 script 应当位于 <script src="mp4-muxer.js"> 之后'
+    entryAt > muxerAt,
+    'module 入口应当位于 vendor/mp4-muxer.js 之后，保证 window.Mp4Muxer 先就位'
   );
 });
 
@@ -185,8 +177,38 @@ test('uiStructure: HTML 中的 id 互不重复', () => {
 
 /* ==================== 4 · 语法闸门 ==================== */
 
-test('uiStructure: 内联 script 整段能被 new Function 编译通过', () => {
-  assert.doesNotThrow(() => new Function(JS), '内联 script 存在语法错误');
+test('uiStructure: 没有任何模块反向导入入口 main.mjs', () => {
+  const offenders = [];
+  for (const path of listAppModulePaths()) {
+    const rel = path.slice(ROOT.length + 1);
+    if (rel === 'src/main.mjs') continue;
+    for (const m of readFileSync(path, 'utf8').matchAll(/^\s*import\s[^;]*?from\s*['"]([^'"]+)['"]/gm)) {
+      if (/(^|\/)main\.mjs$/.test(m[1])) offenders.push(`${rel} → ${m[1]}`);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `main.mjs 是装配入口，依赖只能从它流向各层：\n${offenders.join('\n')}`,
+  );
+});
+
+test('uiStructure: 装载的应用 JS 全部通过语法闸门', () => {
+  for (const src of INLINE_SCRIPTS) {
+    assert.doesNotThrow(() => new Function(src), '内联 script 存在语法错误');
+  }
+
+  const modules = listAppModulePaths();
+  assert.ok(modules.length > 0, 'src/ 下应当有应用模块');
+  for (const path of modules) {
+    const rel = path.slice(ROOT.length + 1);
+    try {
+      // .mjs 按模块语法解析，import / export 合法
+      execFileSync(process.execPath, ['--check', path], { stdio: 'pipe' });
+    } catch (err) {
+      assert.fail(`${rel} 存在语法错误：${String(err.stderr || err.message).trim()}`);
+    }
+  }
 });
 
 /* ==================== 5 · a11y 属性齐全 ==================== */

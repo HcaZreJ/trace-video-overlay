@@ -4,21 +4,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { readCss, readJs } from '../helpers/source.mjs';
 
 const RAW = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 
 /* ==================== 三段切片 ==================== */
 
 function sliceDoc(raw) {
-  const css = [...raw.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n');
-  const inline = [...raw.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
-    .filter((m) => !/\bsrc\s*=/i.test(m[1]))
-    .map((m) => m[2]);
   const bodyM = /<body\b[^>]*>([\s\S]*)<\/body>/i.exec(raw);
   const html = (bodyM ? bodyM[1] : raw)
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '');
-  return { css, html, js: inline.join('\n') };
+  return { css: readCss(), html, js: readJs() };
 }
 
 const { html: HTML, js: JS } = sliceDoc(RAW);

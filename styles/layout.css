@@ -1,0 +1,76 @@
+  .workspace{display:grid;grid-template-columns:1fr 400px;gap:32px;max-width:1520px;margin:0 auto;padding:24px 40px;align-items:start}
+  @media(max-width:760px){.workspace{grid-template-columns:1fr}}
+  .drop{border:2px dashed var(--line);border-radius:14px;padding:16px;text-align:center;
+    cursor:pointer;transition:.15s;background:var(--panel)}
+  .drop:hover,.drop.over{border-color:var(--accent);background:#12161c}
+  .drop > div{font-size:13px;color:var(--fg)}
+  .drop strong{color:var(--fg);font-weight:600}
+  .drop small{display:block;color:var(--dim);margin-top:6px;font-size:12px}
+  .info{margin:14px 0;font-size:13px;color:var(--dim);text-align:center;align-self:stretch}
+  .info b{color:var(--fg)}
+  /* 舞台在视口内垂直居中：自身撑满一屏高再居中内容，不依赖右列的高度
+     （空状态下右列收起后只有几百 px，若靠兄弟列撑高会把卡片拉出视口） */
+  .stage{display:flex;flex-direction:column;gap:20px;align-items:center;justify-content:center;
+    position:sticky;top:0;min-height:calc(100vh - 48px)}
+  /* 移动端与 iPad 的浏览器工具栏会让 100vh 大于可视高度，支持 dvh 时用它精确表达 */
+  @supports (height:100dvh){.stage{min-height:calc(100dvh - 48px)}}
+  @media(max-height:820px){:root{--card-max:320px}}
+  @media(max-width:760px){.stage{position:sticky;top:0;min-height:0;justify-content:flex-start;
+    z-index:10;background:var(--bg);padding:12px 0}}
+  .cardbox{width:min(100%,var(--card-max));aspect-ratio:1;margin:0 auto;border-radius:12px;overflow:hidden;
+    background-image:
+      linear-gradient(45deg,#2a2f37 25%,transparent 25%),
+      linear-gradient(-45deg,#2a2f37 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#2a2f37 75%),
+      linear-gradient(-45deg,transparent 75%,#2a2f37 75%);
+    background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0;
+    background-color:#20242b}
+  @media(max-width:760px){.cardbox{width:min(32vh,100%)}}
+  .cardbox.over{box-shadow:0 0 0 3px var(--accent) inset}
+  body:not(.has-track) .cardbox{cursor:pointer}
+  canvas#card{display:block;width:100%;height:100%}
+  .scrub{width:min(100%,var(--card-max))}
+  .scrub label{display:block;font-size:12px;color:var(--dim);margin-bottom:5px}
+  button.scrub-play{width:36px;height:36px;flex-shrink:0;border:none;border-radius:8px;
+    background:var(--line);color:var(--fg);cursor:pointer;font-size:14px;transition:.15s}
+  button.scrub-play:hover{background:#2a2f37}
+  @media(max-width:760px){button.scrub-play{width:40px;height:40px}}
+  /* 定位点内联小预览：② 样式「定位点」子组标题行右侧的 32px 棋盘格盒子 */
+  .dotbox{width:32px;height:32px;border-radius:6px;flex-shrink:0;
+    background-image:
+      linear-gradient(45deg,#2a2f37 25%,transparent 25%),
+      linear-gradient(-45deg,#2a2f37 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#2a2f37 75%),
+      linear-gradient(-45deg,transparent 75%,#2a2f37 75%);
+    background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0;background-color:#20242b;
+    display:flex;align-items:center;justify-content:center}
+  canvas#dot{display:block}
+  .controls{display:flex;flex-direction:column;gap:calc(var(--sp-step)/2)}
+  .step{position:relative;min-width:0}
+  .step+.step{padding-top:calc(var(--sp-step)/2);border-top:1px solid var(--line)}
+  .step h2{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+    margin:0 0 var(--sp-field);font-size:14px;color:var(--fg);font-weight:600}
+  .subhead{margin:var(--sp-group) 0 var(--sp-field);font-size:13px;color:var(--fg);font-weight:600}
+  .subhead.with-preview{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .step h2+.subhead{margin-top:0}
+  .map-subpanel{margin:0 0 var(--sp-field);padding-left:12px;padding-top:12px;padding-right:12px;padding-bottom:4px;
+    background:var(--panel);border-left:2px solid var(--line);border-radius:0 8px 8px 0}
+  .field{margin-bottom:var(--sp-field)}
+  .field label{display:flex;justify-content:space-between;font-size:13px;color:var(--fg);margin-bottom:var(--sp-label)}
+  .field label span{color:var(--fg)}
+  .field small{display:block;color:var(--dim);margin-top:4px;font-size:12px}
+  .field small a{color:var(--accent)}
+  .color-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .color-row > label{display:flex;font-size:13px;color:var(--fg);margin-bottom:0;flex:0 1 auto}
+  .color-ctl{position:relative;display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .color-pair{display:flex;gap:var(--sp-field);margin-bottom:var(--sp-field)}
+  .color-pair .color-row{flex:1;min-width:0}
+  .color-hex,[data-hex-for]{font-size:12px;color:var(--dim);letter-spacing:.04em;font-variant-numeric:tabular-nums}
+  .gate-hint{display:block;color:var(--dim);font-size:12px;margin:8px 0 14px}
+  /* gate 提示贴在区标题行右端。它是 .step 的直接子节点而不是 h2 的孩子：h2 在收起态带
+     opacity:.45，作为孩子会被一起压到 2.2:1 对比度，读不清 */
+  .step > .gate-hint{position:absolute;top:0;right:0;margin:0;line-height:21px}
+  /* 未载入轨迹：②③ 只剩置灰的区标题行，吸底动作条整条不渲染 */
+  .needs-track .step-body{display:none}
+  .step.needs-track > h2{opacity:.45}
+  .export-actions.needs-track{display:none}

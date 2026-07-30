@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dotGeometry } from '../../core.mjs';
+import { dotGeometry } from '../../src/core/export-params.mjs';
 
 /** 断言 actual[key] 与 expected 在容差 1e-9 内相等，且是有限数字。 */
 function approxEqualField(actual, key, expected, epsilon = 1e-9) {

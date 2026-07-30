@@ -22,31 +22,37 @@
 - 导出三种素材，分辨率 720 / 1080 / 1440 通用：
   - 透明背景的轨迹图 PNG，底色透明度、圆角、内边距可调。
   - 单独一张「当前位置」小圆点 PNG，供在剪辑软件里对它打位置关键帧沿轨迹移动。
-  - MP4 动画，小圆点沿轨迹从起点匀速移动到终点，用 WebCodecs `VideoEncoder` 加一份 vendored 的 `mp4-muxer.js` 编码。
+  - MP4 动画，小圆点沿轨迹从起点匀速移动到终点，用 WebCodecs `VideoEncoder` 加一份 vendored 的 mp4-muxer 编码。
 - 可选叠加一层高德静态地图作为底图。默认关闭，需要用户手动勾选并填入自己的高德 Web 服务 API Key 才启用；境内点位用国测局公式（WGS84 → GCJ-02）自动转换后再投影，避免中国境内地图错位。
-- 无 build 步骤、无 npm 依赖，浏览器打开 `index.html` 即可运行。
+- 无 build 步骤、无 npm 依赖、无后端，源码直接由 GitHub Pages 托管。
 
 ## Usage
 
 打开 [在线站点](https://hcazrej.github.io/trace-video-overlay/)，拖入一个或多个轨迹文件，调整样式，点击导出。
 
-想在本地运行代码：用浏览器直接打开 `index.html`，或者启动一个静态服务器：
+想在本地跑代码，启动一个静态服务器：
 
 ```
 python3 -m http.server 8137
 ```
 
-然后访问 `http://localhost:8137/`。
+然后访问 `http://localhost:8137/`。页面用 ES module 装载代码，需要经 HTTP 打开。
 
 ## Project Structure
 
-| 文件 | 内容 |
+| 路径 | 内容 |
 |---|---|
-| `core.mjs` | 纯函数：Web Mercator 投影、WGS84 → GCJ-02 坐标转换、高德静态地图 URL 构造与对齐数学、轨迹平滑与拼接、几何计算（`dotGeometry`、`pointAtProgress`）、指标计算（距离、时长、均速、配速、爬升）、GeoJSON 与 CSV 坐标提取。ES module 具名导出，`node:test` 覆盖。 |
-| `fit.mjs` | FIT 二进制格式解析。 |
-| `index.html` | 应用本体：CSS、DOM、内联 script（含 `core.mjs` 中所有被页面使用的函数的逐字符同步副本）、Canvas 渲染（`renderCard` / `renderDot` / `renderFrame`）、高德底图 fetch 与错误诊断、MP4 导出管线（含取消与关页拦截）。 |
-| `mp4-muxer.js` | Vendored [Vanilagy/mp4-muxer](https://github.com/Vanilagy/mp4-muxer)，把 WebCodecs 编码出的 chunk 封装成 MP4 容器。 |
-| `tests/visible/`、`tests/hidden/` | `node:test` 单元测试，覆盖 `core.mjs` 的纯逻辑。 |
+| `index.html` | HTML 结构骨架，样式与脚本都从外部文件装载。 |
+| `styles/` | 六份 CSS：设计变量、基础样式、布局、表单控件、组件、取色器。按 `<link>` 顺序层叠。 |
+| `src/core/` | 零浏览器 API 的纯函数，Node 与浏览器共用同一份：Web Mercator 投影、WGS84 → GCJ-02 坐标转换、高德静态地图 URL 构造与对齐数学、轨迹平滑与拼接、几何计算（`dotGeometry`、`pointAtProgress`）、指标计算（距离、时长、均速、配速、爬升）、颜色空间互转。 |
+| `src/parse/` | 六种轨迹格式的解析：`index` 按扩展名分派，`fit` 解 FIT 二进制，`geojson` / `csv` 纯文本，`xml` 处理 GPX / TCX / KML。 |
+| `src/basemap/` | 高德静图的取图、内存缓存、错误码翻译。 |
+| `src/render/` | Canvas 绘制：描边与标记、卡片（预览与逐帧同构）、定位点。 |
+| `src/export/` | 产物出口：PNG 下载、MP4 编码管线（含取消与关页拦截）、导出状态条。 |
+| `src/ui/` | 唯一操作界面 DOM 的一层：预览编排、地图面板、轨迹列表、失败提示与撤销、滑杆联动、自定义取色器。 |
+| `src/main.mjs` | 装配入口：import、事件绑定、首屏初始化。 |
+| `vendor/mp4-muxer.js` | Vendored [Vanilagy/mp4-muxer](https://github.com/Vanilagy/mp4-muxer)，把 WebCodecs 编码出的 chunk 封装成 MP4 容器。 |
+| `tests/` | `node:test` 测试，覆盖纯逻辑与页面结构。 |
 
 ## Testing
 

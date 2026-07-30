@@ -6,7 +6,7 @@ import {
   buildAmapStaticUrl,
   computeOverlayScale,
   computeBasemapDrawRect,
-} from '../../core.mjs';
+} from '../../src/core/amap.mjs';
 
 /** 浮点容差比较：|actual-expected| < epsilon。 */
 function approxEqual(actual, expected, epsilon, msg) {

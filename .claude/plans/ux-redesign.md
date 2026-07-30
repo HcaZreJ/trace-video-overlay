@@ -1,5 +1,8 @@
 # Feature: UI/UX 重构 —— 素材工作台
 
+> 本 plan 已完成，作为设计记录保留。仓库现为按层分模块的多文件结构，
+> 代码位置与仓库级规则以 [AGENTS.md](../../AGENTS.md) 与 [PATTERNS.md](../../PATTERNS.md) 为准。
+
 ## Overview
 把 index.html 的 UI 从"文档流长页 + 单容器参数墙"重构为"预览常驻的工作台"：左列 sticky 预览舞台（卡片 + 定位点叠加 + 动画进度扫拨），右列按任务阶段分为 ①轨迹 ②背景与卡片 ③线路与标记 ④导出 四个分区卡片，导出区吸底。解决三类核心问题：预览与控件不同屏、信息架构不体现参数依赖、控件系统不一致。基线评分 24/40（dual-agent critique，2026-07-07），目标复评 ≥32/40。
 
@@ -118,7 +121,7 @@ Nielsen 24/40（可见性3/真实3/控制2/一致2/防错3/识别3/效率1/极�
     1. 全部数值参数改为「标签(含单位) + 全宽 slider + number 输入」双向同步行；
        改写 bind() 支撑 slider↔number；window resize 时 re-render（修 dot 显示尺寸滞后）。
     2. dotSize range 8-160 默认 58；把 core.mjs 的 dotGeometry/clampMp4Duration 逐字符
-       内联同步进 index.html（去 export），renderDot/renderCard previewDot/renderFrame
+       归 src/core/export-params.mjs，renderDot/renderCard previewDot/renderFrame
        三处改用 dotGeometry（渲染同构铁律）；render() 中 ×1.16 显示因子改为 full/size 比值。
     3. 单位标注：线宽/圆角/内边距/大小 px、透明度 %、时长 秒、取景 ×。
   acceptance: |

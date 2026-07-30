@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { wgs84ToGcj02 } from '../../core.mjs';
+import { wgs84ToGcj02 } from '../../src/core/gcj02.mjs';
 
 /**
  * 断言 actual 是一个 {lng,lat} 均为数值、且与 expected 在给定容差内相等的坐标点，

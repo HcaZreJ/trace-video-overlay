@@ -11,17 +11,17 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { readAll, readCss, readJs } from '../helpers/source.mjs';
 
 /* ==================== 读取与切段 ==================== */
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = readFileSync(join(ROOT, 'index.html'), 'utf8');
+/** 全站源码：「某段旧内容已彻底删除」这类断言的搜索范围。 */
+const ALL = readAll();
 
-const CSS = [...SRC.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n');
-const JS = [...SRC.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)]
-  .filter((m) => !/\bsrc\s*=/i.test(m[1]))
-  .map((m) => m[2])
-  .join('\n');
+const CSS = readCss();
+const JS = readJs();
 const HTML = ((/<body[^>]*>([\s\S]*)<\/body>/i.exec(SRC) || [null, SRC])[1])
   .replace(/<script[\s\S]*?<\/script>/gi, '')
   .replace(/<style[\s\S]*?<\/style>/gi, '')
@@ -266,7 +266,7 @@ test('uiStage: #dot 被 .dotbox 包裹，且与「定位点」子组标题同处
 test('uiStage: 旧 .dotwrap 的两行说明文字不再出现', () => {
   for (const old of ['单独的定位点', '放进剪映后用位置关键帧']) {
     assert.ok(
-      !hasText(SRC, old),
+      !hasText(ALL, old),
       `T4 第 2 条：期望旧的定位点说明「${old}」已删除（定位点规则只保留 ② 样式里的那一句）`,
     );
   }
@@ -356,7 +356,7 @@ test('uiStage: 空状态副行「也可以先载入示例轨迹」以 loadSample
 
 test('uiStage: 旧的空状态文案不再出现', () => {
   for (const old of ['拖入轨迹文件开始', '或点上方「试试示例轨迹」']) {
-    assert.ok(!hasText(SRC, old), `T4 第 5 条：期望旧空状态文案「${old}」已被替换`);
+    assert.ok(!hasText(ALL, old), `T4 第 5 条：期望旧空状态文案「${old}」已被替换`);
   }
 });
 
