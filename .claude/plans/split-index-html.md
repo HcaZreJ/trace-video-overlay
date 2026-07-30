@@ -63,7 +63,7 @@ src/
     image.mjs                  loadImageFromBlob · loadImageDirect
     fetch.mjs                  fetchBasemapViaHttp · fetchAmapBasemap · 内存缓存 · 超时
 
-  render/                      要 canvas，不碰界面 DOM
+  render/                      收 canvas 作画；读 state 与控件取值，不写 DOM
     primitives.mjs             hexToRgba · strokePath · drawMarker
     card.mjs                   renderCard · renderFrame（同构一对，同文件让同步约束可见）
     dot.mjs                    renderDot
@@ -75,9 +75,10 @@ src/
     mp4.mjs                    mp4Yield · mp4Supported · buildFrameOpts · pickMp4Codec
                                · exportMp4 · 关页拦截
 
+  state.mjs                    跨层共享的可变状态 + CARD_SIZE（叶子）
+  dom.mjs                      $ 取元素（叶子）
+
   ui/                          唯一碰界面 DOM 的一层
-    dom.mjs                    $ · bind · stepDecimals · 拖放绑定
-    state.mjs                  应用状态与常量的单一持有者
     track-errors.mjs           clearTrackErrors · showTrackErrors · clearTrackUndo · showTrackUndo
     track-panel.mjs            setTrackGate · loadTrackFiles · recomputeTrack · renderFileList
                                · trackFileAction · clearTrack
@@ -570,4 +571,14 @@ T2 · T5 · T6 · T7 · T9 各自的 acceptance 里写明该单元必须手测�
 
 ## Status
 
-In Progress —— 已落 plan，待用户批准 BACKLOG 后开工 Wave 1。
+Completed —— 14 个工作单元全部交付并验收，15 个 commit 落在分支 `worktree-split-index-html`。
+
+终态：`index.html` 2550 → 295 行（零 `<style>`、零内联逻辑）；`src/` 下 33 个模块，
+最大 193 行；仓库里零重复算法定义；零模块反向导入入口；
+`node --test 'tests/**/*.test.mjs'` 一条命令 635 个全绿。
+
+执行中有两处设计被实测推翻并已就地改写：`render` 层原假设不碰界面 DOM，
+实测 `renderCard` 直接读 13 个控件取值，因此增设计划外的 T3a 把跨层状态与 `$`
+外置成叶子模块；`export` 与 `ui` 之间是双向依赖而非单向，PATTERNS.md 按实际形态陈述。
+
+留给后续的改进项走 GitHub issues，不在本 plan 范围内。

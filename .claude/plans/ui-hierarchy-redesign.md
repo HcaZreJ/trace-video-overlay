@@ -1,5 +1,8 @@
 # Feature: 工作台信息层级重设计（index.html 纯 UI 改造）
 
+> 本 plan 已完成，作为设计记录保留。仓库现为按层分模块的多文件结构，
+> 代码位置与仓库级规则以 [AGENTS.md](../../AGENTS.md) 与 [PATTERNS.md](../../PATTERNS.md) 为准。
+
 ## Status
 Completed — T0–T4 全部落地，§7 验收清单逐条通过。
 

@@ -1,5 +1,8 @@
 # Feature: 地图底图 overlay（高德静图）
 
+> 本 plan 已完成，作为设计记录保留。仓库现为按层分模块的多文件结构，
+> 代码位置与仓库级规则以 [AGENTS.md](../../AGENTS.md) 与 [PATTERNS.md](../../PATTERNS.md) 为准。
+
 ## Overview
 在现有透明卡片渲染之上，新增一个可选的**地图底图 overlay** 模式：把高德「静态地图 API」返回的
 底图铺在卡片下面，轨迹线与定位点画在上面，一次骑行的信息从「一根线」变成「一张能看出
@@ -30,7 +33,7 @@
   - 纯前端、无 build、无后端；无 key 时降级为原透明卡片模式（无底图）。
   - GitHub Pages 部署路径不变；`index.html` 打开即用。
   - 与现有 MP4/PNG 导出管线兼容：MP4 一次请求一张不动的底图，逐帧只叠轨迹+定位点。
-  - core.mjs 公共逻辑与 index.html 内联 script 逐字符同步。
+  - 纯函数归 src/core/，浏览器与 Node 导入同一份。
 - **Non-goals**：
   - 卫星图 / 地形图 / 多种地图样式切换（高德静图 API 不支持）。
   - 百度地图接入。
@@ -151,7 +154,7 @@
 ### A2 · index.html：内联同步 + fetch + 渲染变换 + UI 终态
 - **file_path**：`index.html`（同文件一个 implementer 串行完成；浏览器运行时逻辑，无 hidden test，
   浏览器实测验收）。
-- **内联同步**：core.mjs 中 A1 触及的全部函数/常量逐字符同步进内联 script。
+- **单一实现**：A1 触及的全部函数与常量归 src/core/amap.mjs，调用方 import。
 - **fetch 层**：
   - `fetchAmapBasemap({ pointsWgs84, key, traffic }) → Promise<{ image, center, zoom, spanPx, contentSize, url }>`
     - 恒 `size=1024`、`scale=2`，`contentSize = 1024`。

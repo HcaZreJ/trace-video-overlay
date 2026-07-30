@@ -1,5 +1,8 @@
 # Feature: 多轨迹文件首尾相连
 
+> 本 plan 已完成，作为设计记录保留。仓库现为按层分模块的多文件结构，
+> 代码位置与仓库级规则以 [AGENTS.md](../../AGENTS.md) 与 [PATTERNS.md](../../PATTERNS.md) 为准。
+
 ## Overview
 当前 app 只接受单个轨迹文件。补齐 trace-photo-overlay 已有的能力：一次导入多个
 GPX/KML/TCX/FIT/GeoJSON/CSV 文件，按用户指定顺序**首尾拼接成一条轨迹**再渲染，

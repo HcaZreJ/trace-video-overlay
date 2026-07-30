@@ -10,7 +10,7 @@
 | `src/parse/` | 按轨迹格式分家，`index.mjs` 按扩展名分派。`xml.mjs` 依赖浏览器 `DOMParser`，因而是这一层里唯一 Node 下不可单测的模块。 |
 | `src/basemap/` | 高德静图的网络与图片解码。不碰界面 DOM；结果经返回值或带 `code` 的 `Error` 交给 ui 层。 |
 | `src/render/` | 收 canvas 作画。从 `state` 读轨迹与进度、用 `$` 读控件当前值，不写 DOM、不绑事件、不改 state。 |
-| `src/export/` | 产物出口：PNG 下载、MP4 编码管线、导出状态条。 |
+| `src/export/` | 产物出口：PNG 下载、MP4 编码管线、导出状态条。与 `ui` 互相调用，见「依赖方向」。 |
 | `src/ui/` | 唯一写界面 DOM、绑事件的一层。 |
 | `src/state.mjs` | 跨层共享的可变状态与 `CARD_SIZE`。叶子，零导入。 |
 | `src/dom.mjs` | `$` 取元素。叶子，零导入。 |
@@ -19,15 +19,23 @@
 
 ## 依赖方向
 
-跨层单向向下：`ui → export → render → core`、`ui → basemap → core`、`parse → core`，
-各层都可以导入 `state` 与 `dom` 两个叶子。
+**恒真的一条**：没有任何模块导入入口 `src/main.mjs`，依赖只从它流向各层。
+这条由 `tests/hidden/uiStructure.test.mjs` 盯着。
 
-没有任何模块导入入口 `src/main.mjs` —— 这条由 `tests/hidden/uiStructure.test.mjs` 盯着。
+**主干向下**：`core` 是叶子，谁都可以导入它；`parse` · `basemap` · `render` 只向下依赖
+`core` 与 `state` / `dom` 两个叶子，不反向依赖 `export` 或 `ui`。
 
-同层的兄弟模块之间存在互相调用：`ui/map-panel ↔ ui/preview`（重绘失败要报状态、
+**`export` 与 `ui` 之间是双向的**：`export/png` 与 `export/mp4` 在开工前要调
+`ui/map-panel.onPreviewMapOverlay`（补拉底图）与 `ui/preview.stopPreviewPlay`（停动画），
+而 `ui/track-panel` 要调 `export/mp4.mp4Supported` 决定界面能力。给这两层排先后没有意义，
+它们是同一次「用户点导出」里的协作方。
+
+**同层兄弟模块之间也互相调用**：`ui/map-panel ↔ ui/preview`（重绘失败要报状态、
 底图拉取完成要重绘）、`ui/track-panel ↔ ui/track-errors`（撤销按钮触发重算、载入失败弹提示）、
 `ui/color-picker/` 四个模块构成一个强连通分量（输入框与指针回调就是状态同步链路本身）。
-这些是面板间的控制回调，ESM 对提升的函数声明支持这种形态；跨层依赖仍严格单向。
+
+这些环都只在函数体内跨模块调用，模块顶层不读取伙伴模块的绑定，因此 ESM 求值期安全。
+往这些模块的顶层加会立即执行的语句时要留意这一点。
 
 ## 跨模块状态
 
@@ -121,7 +129,8 @@ ES module 的导入绑定是只读的，所以多个模块共读共写的状态�
 
 ## 测试
 - Node 内置 `node:test` + `node:assert/strict`，零框架。
-- `tests/unit/` 覆盖 core 与 parse 的纯逻辑。
+- `tests/unit/` 覆盖 core 与 parse 的纯逻辑。`src/core/metrics.mjs` 的六个指标函数
+  目前只有测试覆盖、界面尚未接线，改动它不影响页面行为。
 - harness 单元走 `tests/visible/`（少量样例，实现 agent 可见）+ `tests/hidden/`
   （全面用例，实现 agent 仅见跑分）双文件盲测。
 - UI 测试断言的对象是「浏览器最终装载到的 CSS 与 JS」，取材统一走
