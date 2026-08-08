@@ -1,15 +1,18 @@
 // 导出层 · MP4 动画导出（WebCodecs + vendored mp4-muxer）。
 // Mp4Muxer 由 vendor/mp4-muxer.js 以 classic script 挂在全局，这里直接取用。
 // 导出期间锁住产物切换、拦截关页、把 #expMp4 变成取消入口。
-import { clampMp4Duration } from '../core/export-params.mjs';
+import { buildTimeTrueFilename } from '../core/export-meta.mjs';
 import { renderFrame } from '../render/card.mjs';
 import { state } from '../state.mjs';
 import { $ } from '../dom.mjs';
+import { createMp4Sink, downloadSidecar } from './mp4-sink.mjs';
+import { resolveExportPlan, frameProgress, formatEta, buildExportSidecar } from './mp4-plan.mjs';
+import { buildFrameOpts } from './mp4-opts.mjs';
 import { exportState, setExportStatus, setExportKindLocked, showExportBlockedStatus } from './status.mjs';
+import { timeMode, currentExportWindow } from '../ui/time-mode.mjs';
 import { onPreviewMapOverlay } from '../ui/map-panel.mjs';
 import { stopPreviewPlay } from '../ui/preview.mjs';
 
-const MP4_BITRATE={720:6e6,1080:12e6,1440:20e6};
 // 让出主线程：MessageChannel 宏任务没有 setTimeout 的 4ms 钳制，后台标签页也不被节流
 const mp4YieldChannel=new MessageChannel();
 function mp4Yield(){
@@ -19,38 +22,10 @@ export function mp4Supported(){
   return 'VideoEncoder' in window && 'VideoFrame' in window &&
     typeof VideoEncoder.isConfigSupported==='function' && !!window.Mp4Muxer;
 }
-function buildFrameOpts(){
-  return {
-    radius:+$('radius').value,
-    pad:+$('pad').value,
-    lineWidth:+$('lineWidth').value,
-    bgMode:$('mp4BgMode').value,
-    pageColor:$('mp4PageColor').value,
-    greenColor:$('mp4GreenColor').value,
-    bgColor:$('bgColor').value,
-    bgOpacity:+$('bgOpacity').value/100,
-    lineColor:$('lineColor').value,
-    showMarkers:$('showMarkers').checked,
-    markerSize:+$('markerSize').value,
-    startColor:$('startColor').value,
-    endColor:$('endColor').value,
-    dotColor:$('dotColor').value,
-    dotSize:+$('dotSize').value,
-    basemapImage: window.mapOverlayState ? window.mapOverlayState.basemapImage : null,
-    mapCenter: window.mapOverlayState ? window.mapOverlayState.mapCenter : null,
-    mapZoom: window.mapOverlayState ? window.mapOverlayState.mapZoom : null,
-    spanPx: window.mapOverlayState ? window.mapOverlayState.spanPx : 0,
-    contentSize: window.mapOverlayState ? window.mapOverlayState.contentSize : 1024,
-    viewScale: window.mapOverlayState ? window.mapOverlayState.viewScale : 1,
-    overlayMode: window.mapOverlayState ? window.mapOverlayState.overlayMode : 'none',
-    overlayMaskOpacity: window.mapOverlayState ? window.mapOverlayState.overlayMaskOpacity : 0,
-  };
-}
-async function pickMp4Codec(size,fps){
+async function pickMp4Codec(size,fps,bitrate){
   const byRes={720:'avc1.42001f',1080:'avc1.420028',1440:'avc1.420033'};
   const primary=byRes[size]||'avc1.420028';
   const candidates=[...new Set([primary,'avc1.42001f','avc1.420028','avc1.420033'])];
-  const bitrate=MP4_BITRATE[size]||1.2e7;
   for(const codec of candidates){
     try{
       const r=await VideoEncoder.isConfigSupported({codec,width:size,height:size,bitrate,framerate:fps});
@@ -58,6 +33,10 @@ async function pickMp4Codec(size,fps){
     }catch(_){}
   }
   return null;
+}
+// 毫秒时间戳 → 本地时区的 ISO 形态时刻，供成功文案写明动画起点。
+function localIsoText(ms){
+  return new Date(ms-new Date(ms).getTimezoneOffset()*6e4).toISOString().slice(0,19).replace('T',' ');
 }
 let mp4ExportInProgress = false;
 let mp4CancelRequested = false;
@@ -79,29 +58,34 @@ async function exportMp4(){
   const skipBasemap = exportState.forceNoBasemap;
   exportState.forceNoBasemap = false;
   if(!state.trackPoints||!mp4Supported()) return;
+  const plan = resolveExportPlan();
+
+  // 保存框要求 user activation：产物出口抢在补拉底图的网络请求之前建立，
+  // 先等别的异步会让手势过期，浏览器随即拒绝弹出保存框。
+  let sink;
+  try{
+    sink = await createMp4Sink({ suggestedName: plan.suggestedName, preferStream: plan.preferStream });
+  }catch(err){
+    // 用户在保存框点取消：静默结束，界面维持原样。
+    if(err&&err.name==='AbortError') return;
+    setExportStatus('导出失败：'+(err&&err.message?err.message:String(err)),'error');
+    return;
+  }
+
   const mapActive = $('mapOverlay').checked;
   if(mapActive && !skipBasemap && (!window.mapOverlayState || state.mapOverlayNeedsRefresh)){
     try { await onPreviewMapOverlay(); } catch(_) { /* onPreviewMapOverlay 已内部 catch，这里无 throw */ }
   }
   if(mapActive && !skipBasemap && !window.mapOverlayState){
+    await sink.abort();
     showExportBlockedStatus(exportMp4);
     return;
   }
   const btn=$('expMp4');
-  const duration=clampMp4Duration(+$('mp4Duration').value);
-  const fps=Math.max(1,+$('mp4Fps').value||30);
-  const size=+$('exportRes').value||1080;
-  const frames=Math.max(1,Math.round(duration*fps));
-  const bitrate=MP4_BITRATE[size]||1.2e7;
-
-  const savedOverlayState = window.mapOverlayState;
-  let opts;
-  try {
-    if(skipBasemap) window.mapOverlayState = null;
-    opts = buildFrameOpts();
-  } finally {
-    window.mapOverlayState = savedOverlayState;
-  }
+  const size=plan.size;
+  const fps=plan.fps;
+  const frames=plan.frames;
+  const opts=buildFrameOpts({ skipBasemap, size: plan.size });
 
   const off=document.createElement('canvas');
   off.width=off.height=size;
@@ -118,32 +102,37 @@ async function exportMp4(){
   $('mp4ProgressWrap').style.display='';
   $('mp4Progress').value=0; $('mp4Progress').max=frames;
   $('mp4ProgressV').textContent='0%';
+  $('mp4Eta').textContent='';
 
   let encoder=null;
   let cancelled=false;
   try{
-    const codec=await pickMp4Codec(size,fps);
+    const codec=await pickMp4Codec(size,fps,plan.bitrate);
     if(!codec) throw new Error('当前浏览器不支持所需的 H.264 编码，请使用最新版 Chrome / Edge，或较新版本的 Safari');
 
-    const target=new Mp4Muxer.ArrayBufferTarget();
-    const muxer=new Mp4Muxer.Muxer({ target, video:{ codec:'avc', width:size, height:size }, fastStart:'in-memory' });
+    const muxer=new Mp4Muxer.Muxer({ target:sink.target, video:{ codec:'avc', width:size, height:size }, fastStart:sink.fastStart });
     let encodeError=null;
     encoder=new VideoEncoder({
       output:(chunk,meta)=>muxer.addVideoChunk(chunk,meta),
       error:e=>{ encodeError=e; }
     });
-    encoder.configure({ codec, width:size, height:size, bitrate, framerate:fps });
+    encoder.configure({ codec, width:size, height:size, bitrate:plan.bitrate, framerate:fps });
 
+    const startedAt=Date.now();
     for(let i=0;i<frames;i++){
       if(mp4CancelRequested){ cancelled=true; break; }
       if(encodeError) throw encodeError;
-      const progress=frames>1 ? i/(frames-1) : 0;
+      const progress=frameProgress(plan,i);
       renderFrame(offCtx,size,progress,opts);
       const frame=new VideoFrame(off,{timestamp:Math.round(i*1e6/fps)});
       encoder.encode(frame,{keyFrame:i%fps===0});
       frame.close();
-      $('mp4Progress').value=i+1;
-      $('mp4ProgressV').textContent=Math.round(((i+1)/frames)*100)+'% ('+(i+1)+'/'+frames+')';
+      const done=i+1;
+      $('mp4Progress').value=done;
+      $('mp4ProgressV').textContent=Math.round((done/frames)*100)+'% ('+done+'/'+frames+')';
+      // 剩余时间按已完成帧的平均耗时外推；首帧之前没有耗时样本，留空串不显示
+      const elapsed=(Date.now()-startedAt)/1000;
+      $('mp4Eta').textContent = elapsed>0 ? formatEta(elapsed/done*(frames-done)) : '';
       // 背压：编码队列过深时等编码器消化，控制内存占用；否则只让出一个宏任务保持 UI 可响应
       while(encoder.encodeQueueSize>6){
         if('ondequeue' in encoder) await new Promise(r=>encoder.addEventListener('dequeue',r,{once:true}));
@@ -153,6 +142,7 @@ async function exportMp4(){
     }
 
     if(cancelled){
+      await sink.abort();
       setExportStatus('已取消','info');
       return;
     }
@@ -160,15 +150,23 @@ async function exportMp4(){
     await encoder.flush();
     if(encodeError) throw encodeError;
     muxer.finalize();
+    await sink.finish(plan.suggestedName);
 
-    const blob=new Blob([target.buffer],{type:'video/mp4'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download='轨迹动画.mp4';
-    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-
-    setExportStatus('已下载「轨迹动画.mp4」','success');
+    if(plan.mode==='true'){
+      const win=currentExportWindow();
+      downloadSidecar(buildExportSidecar(plan,{
+        trackStartMs: timeMode.range ? timeMode.range.startMs : null,
+        trackEndMs: timeMode.range ? timeMode.range.endMs : null,
+        sourceFiles: (Array.isArray(state.trackFiles)?state.trackFiles:[]).map(f=>f&&f.name),
+        collapsedSegmentGaps: !!(win&&win.collapseSegmentGaps),
+      }), buildTimeTrueFilename(plan.t0Ms, plan.scale, 'json'));
+      setExportStatus(`已导出「${plan.suggestedName}」· 起点 ${localIsoText(plan.t0Ms)} · 缩放 ${plan.scale}`,'success');
+    }else{
+      setExportStatus('已下载「轨迹动画.mp4」','success');
+    }
   }catch(err){
     console.error(err);
+    await sink.abort();
     setExportStatus('导出失败：'+(err&&err.message?err.message:String(err)),'error');
   }finally{
     if(encoder&&encoder.state&&encoder.state!=='closed'){ try{encoder.close();}catch(_){} }
@@ -179,6 +177,7 @@ async function exportMp4(){
     $('expDot').disabled = !state.trackPoints;
     setExportKindLocked(false);
     $('mp4ProgressWrap').style.display='none';
+    $('mp4Eta').textContent='';
     setMp4BeforeUnloadGuard(false);
   }
 }
