@@ -2,6 +2,7 @@
 // Mp4Muxer 由 vendor/mp4-muxer.js 以 classic script 挂在全局，这里直接取用。
 // 导出期间锁住产物切换、拦截关页、把 #expMp4 变成取消入口。
 import { buildTimeTrueFilename } from '../core/export-meta.mjs';
+import { formatLocalIso } from '../core/time-format.mjs';
 import { renderFrame } from '../render/card.mjs';
 import { state } from '../state.mjs';
 import { $ } from '../dom.mjs';
@@ -33,10 +34,6 @@ async function pickMp4Codec(size,fps,bitrate){
     }catch(_){}
   }
   return null;
-}
-// 毫秒时间戳 → 本地时区的 ISO 形态时刻，供成功文案写明动画起点。
-function localIsoText(ms){
-  return new Date(ms-new Date(ms).getTimezoneOffset()*6e4).toISOString().slice(0,19).replace('T',' ');
 }
 let mp4ExportInProgress = false;
 let mp4CancelRequested = false;
@@ -175,7 +172,7 @@ async function exportMp4(){
         }), sink.savedName ? sink.savedName.replace(/\.[^.]*$/,'')+'.json'
           : buildTimeTrueFilename(plan.t0Ms, plan.scale, 'json'));
       }catch(e){ console.error(e); note=' · 元数据文件未能保存'; }
-      setExportStatus(`已导出「${savedName}」· 起点 ${localIsoText(plan.t0Ms)} · 缩放 ${plan.scale}${note}`,'success');
+      setExportStatus(`已导出「${savedName}」· 起点 ${formatLocalIso(plan.t0Ms)} · 缩放 ${plan.scale}${note}`,'success');
     }else{
       setExportStatus(`已下载「${savedName}」`,'success');
     }

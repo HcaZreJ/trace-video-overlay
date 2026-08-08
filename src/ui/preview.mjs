@@ -2,6 +2,7 @@
 // 播放态是本模块私有的，只有 previewPlaying 对外可读，供入口的播放按钮判断当前该起还是该停。
 import { clampMp4Duration } from '../core/export-params.mjs';
 import { timeAtProgress } from '../core/track-time.mjs';
+import { formatLocalHms } from '../core/time-format.mjs';
 import { renderCard } from '../render/card.mjs';
 import { renderDot } from '../render/dot.mjs';
 import { state, CARD_SIZE } from '../state.mjs';
@@ -25,14 +26,6 @@ export function render(){
 }
 
 /* ==================== 动画预览播放（扫拨条所见即所得） ==================== */
-const pad2 = (n) => String(n).padStart(2, '0');
-
-// 毫秒时间戳 → 本地时区的 `HH:MM:SS`。
-function localHms(ms){
-  const d = new Date(ms);
-  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-}
-
 // 时间真实模式下扫拨条跑完一圈的秒数 = 导出窗口的真实跨度 ÷ 时间缩放；
 // 非时间真实模式、窗口无效、算出的时长非正有限数都返回 null，由调用方回落到匀速时长。
 function timeTrueVideoSec(){
@@ -85,7 +78,7 @@ export function updatePreviewScrubLabel(){
     const ms = timeAtProgress(timeMode.index, state.previewProgress);
     if(ms !== null && Number.isFinite(ms)){
       $('previewScrubLabel').textContent =
-        `动画预览 · ${localHms(ms)} · 共 ${Math.round(videoSec)} 秒`;
+        `动画预览 · ${formatLocalHms(ms)} · 共 ${Math.round(videoSec)} 秒`;
       return;
     }
   }

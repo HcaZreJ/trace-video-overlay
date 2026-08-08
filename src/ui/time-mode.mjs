@@ -2,6 +2,8 @@
 // timeMode 是跨模块共享的可变状态：ui/preview 与 export/mp4 都读它，
 // ES module 的导入绑定只读，所以挂成对象属性。
 import { trackTimeRange, buildTimeIndex } from '../core/track-time.mjs';
+import { toLocalInputValue, parseLocalInputValue } from '../core/time-format.mjs';
+import { segmentStartIndices } from '../core/track-files.mjs';
 import { clampMp4Duration, mp4Bitrate, estimateMp4Bytes, formatByteSize } from '../core/export-params.mjs';
 import { streamSinkSupported, MP4_MAX_DURATION_STREAM, MP4_MAX_DURATION_MEMORY } from '../export/mp4-sink.mjs';
 import { state } from '../state.mjs';
@@ -14,22 +16,6 @@ export const timeMode = {
 };
 
 const pad2 = (n) => String(n).padStart(2, '0');
-
-// 毫秒时间戳 → datetime-local 的取值 `YYYY-MM-DDTHH:mm:ss`，按本地时区的时间分量拼。
-function toLocalInputValue(ms) {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-    + `T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-}
-
-// datetime-local 的取值（不带时区后缀）→ 毫秒时间戳，按本地时区解析；解析不出为 NaN。
-function parseLocalInputValue(text) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/
-    .exec(String(text == null ? '' : text).trim());
-  if (!m) return NaN;
-  const ms = m[7] ? +String(m[7]).padEnd(3, '0') : 0;
-  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], m[6] ? +m[6] : 0, ms).getTime();
-}
 
 // 秒数 → 人读时钟串：不足一小时 `M:SS`，超过则 `H:MM:SS`。
 function formatClock(sec) {
@@ -46,13 +32,7 @@ export function refreshTimeMode() {
   const points = state.trackPoints;
   const files = Array.isArray(state.trackFiles) ? state.trackFiles : [];
 
-  // 各段在拼接后点序列里的起始索引：首段为 0，第 k 段为前 k 段点数之和。
-  const segmentStarts = [];
-  let acc = 0;
-  for (const f of files) {
-    segmentStarts.push(acc);
-    acc += f && Array.isArray(f.points) ? f.points.length : 0;
-  }
+  const segmentStarts = segmentStartIndices(files);
 
   timeMode.range = trackTimeRange(points);
   timeMode.index = buildTimeIndex(points, {

@@ -3,6 +3,7 @@
 import { progressAtTime } from '../core/track-time.mjs';
 import { clampMp4Duration, mp4Bitrate } from '../core/export-params.mjs';
 import { buildTimeTrueFilename, buildSidecarMeta } from '../core/export-meta.mjs';
+import { segmentStartIndices } from '../core/track-files.mjs';
 import { streamSinkSupported, MP4_MAX_DURATION_STREAM, MP4_MAX_DURATION_MEMORY } from './mp4-sink.mjs';
 import { buildTimeTruePlan } from './mp4-opts.mjs';
 import { timeMode, isTimeTrueMode, currentExportWindow } from '../ui/time-mode.mjs';
@@ -21,14 +22,7 @@ export function resolveExportPlan() {
 
   const win = isTimeTrueMode() ? currentExportWindow() : null;
   if (win) {
-    // 各段在拼接后点序列里的起始索引：首段为 0，第 k 段为前 k 段点数之和。
-    const files = Array.isArray(state.trackFiles) ? state.trackFiles : [];
-    const segmentStarts = [];
-    let acc = 0;
-    for (const f of files) {
-      segmentStarts.push(acc);
-      acc += f && Array.isArray(f.points) ? f.points.length : 0;
-    }
+    const segmentStarts = segmentStartIndices(state.trackFiles);
     const timePlan = buildTimeTruePlan({
       points: state.trackPoints,
       segmentStarts,

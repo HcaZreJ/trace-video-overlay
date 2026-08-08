@@ -7,6 +7,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   toLocalInputValue,
@@ -15,6 +17,7 @@ import {
   formatLocalIso,
 } from '../../src/core/time-format.mjs';
 import { segmentStartIndices, concatTrackPoints } from '../../src/core/track-files.mjs';
+import { ROOT } from '../helpers/source.mjs';
 
 /** 把任意值渲染成断言消息里可读的标签。 */
 function label(value) {
@@ -397,4 +400,42 @@ test('timeFormatCore · segmentStartIndices 不修改入参', () => {
   segmentStartIndices(files);
   assert.equal(JSON.stringify(files), snapshot);
   assert.equal(files.length, 2);
+});
+
+/* ============ 调用点收敛：上层不再各自实现同一套换算 ============ */
+
+// 这批换算原本在界面层与导出层各写一份。重复实现最大的代价不是行数，而是
+// 时区往返这种最容易写错的逻辑散在浏览器层、拿不到 core 的单测覆盖。
+
+test('timeFormatCore · 调用点收敛: 本地时刻换算统一从 core/time-format.mjs 取', () => {
+  const CONSUMERS = ['src/ui/time-mode.mjs', 'src/ui/preview.mjs', 'src/export/mp4.mjs'];
+  let importers = 0;
+  for (const rel of CONSUMERS) {
+    const src = readFileSync(join(ROOT, rel), 'utf8');
+    const imports = /import\s*\{[^}]*\}\s*from\s*['"][^'"]*core\/time-format\.mjs['"]/.test(src);
+    if (imports) importers += 1;
+    assert.doesNotMatch(
+      src,
+      /function\s+(toLocalInputValue|parseLocalInputValue|localHms|localIsoText|formatLocalHms|formatLocalIso)\s*\(/,
+      `${rel} 不该再自己实现本地时刻换算，应当从 core/time-format.mjs 取`,
+    );
+  }
+  assert.ok(importers >= 2, `期望至少两个上层模块改为 import，实得 ${importers} 个`);
+});
+
+test('timeFormatCore · 调用点收敛: 分段起点统一从 core/track-files.mjs 取', () => {
+  for (const rel of ['src/ui/time-mode.mjs', 'src/export/mp4-plan.mjs']) {
+    const src = readFileSync(join(ROOT, rel), 'utf8');
+    assert.match(
+      src,
+      /import\s*\{[^}]*\bsegmentStartIndices\b[^}]*\}\s*from\s*['"][^'"]*core\/track-files\.mjs['"]/,
+      `${rel} 应当从 core/track-files.mjs 取 segmentStartIndices`,
+    );
+    assert.match(src, /segmentStartIndices\s*\(/, `${rel} 应当调用它`);
+    assert.doesNotMatch(
+      src,
+      /segmentStarts\.push\s*\(/,
+      `${rel} 不该再自己累计分段起点`,
+    );
+  }
 });
