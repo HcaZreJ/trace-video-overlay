@@ -627,6 +627,78 @@
     全量 node --test 绿；无头 Chrome 实测：载入 淀山湖.fit → 切「按真实时间」→
     起止时刻自动填成轨迹范围 → 扫拨条显示真实时刻 → 体积估算随画质变化。
 
+- id: T12
+  title: 导出链路加固（终审 FAIL / HIGH 项）
+  file_path: src/ui/time-mode.mjs · src/export/mp4-plan.mjs · src/export/mp4.mjs · src/export/mp4-sink.mjs · src/export/png.mjs
+  functions:
+    - name: （逐条修复，见 behavioral_contract）
+      inputs: []
+      outputs: ""
+      behavioral_contract: |
+        A · 模式 segmented 的选中态：updateTimeModeUI 里对 #mp4TimeModeEvenLabel 与
+          #mp4TimeModeTrueLabel 切 .active，与 updateExportKindUI / 地图底图 segmented 同一范式。
+          .seg-opt.active 是纯 JS 驱动的，没有 :checked 的 CSS 兜底，不切就看不出选了哪个。
+        B · resolveExportPlan 的 scale / fps 取自已消毒的 win（win.scale / win.fps），
+          不再重读控件。控件清空时 +'' 为 0，会让 buildTimeTruePlan 抛 RangeError，
+          而该调用点在 try 之外、onExpMp4Click 又不 catch，按钮会毫无反应。
+        C · 折叠开启时实际生效的时间轴是 index：refreshTimeMode 写起止时刻输入框的
+          min/max/value、以及 currentExportWindow 的 clamp，一律改用 timeMode.index 的
+          startMs/endMs。用 range 会让时长与体积提示把整个被折叠的空隙算进去。
+        D · 时间真实模式下 resolveExportPlan 降级成匀速时，exportMp4 阻断并 setExportStatus
+          说明原因，不再静默导出匀速产物。阻断点在 createMp4Sink 之前，避免先弹保存框。
+        E · createMp4Sink 之后到编码 try 之间不留无保护区：buildFrameOpts、离屏 canvas 创建、
+          界面锁定都纳入 try，catch 里照常 sink.abort() 并报状态，finally 照常复位。
+        F · 用户在保存框点取消时归还 exportState.forceNoBasemap——这次导出没有发生，
+          一次性开关不该被消费掉。
+        G · 流式路径的 sink 回传实际保存名（handle.name），sidecar 文件名与成功文案都用它。
+          showSaveFilePicker 只把 suggestedName 当建议，用户改名后「同名 sidecar」这条
+          跨 repo 契约会断。
+        H · sidecar 下载单独 try/catch：MP4 已落盘后 sidecar 失败只追加提示，
+          不把整次导出报成失败。
+        I · 空轨迹守卫贯彻到导出入口：mp4.mjs 与 png.mjs 的 `!state.trackPoints` 判断
+          一并认空数组，与 render 层的约定一致。
+        J · 体积估算按时长上限夹取，与实际导出的时长一致。
+      error_cases:
+        - { condition: "时间真实模式但算不出导出窗口", behavior: "阻断并说明，不降级导出" }
+        - { condition: "sink 建立后、编码开始前抛错", behavior: "sink.abort() + 状态报错 + 界面复位" }
+  dependencies: [T8, T9]
+  reuse_candidates: |
+    segmented 选中态照 src/export/status.mjs 的 updateExportKindUI 与 src/ui/map-panel.mjs 的现成写法；
+    不新增模块。
+  acceptance: "visible + hidden 全绿；终审列出的 5 项 HIGH 与相关 WARN 全部消解。"
+
+- id: T13
+  title: 本地时刻格式化与分段起点提取进 core
+  file_path: src/core/time-format.mjs（新建）· src/core/track-files.mjs · src/ui/time-mode.mjs · src/ui/preview.mjs · src/export/mp4.mjs · src/export/mp4-plan.mjs
+  functions:
+    - name: toLocalInputValue / parseLocalInputValue / formatLocalHms / formatLocalIso
+      inputs: [ "毫秒 epoch 或 datetime-local 取值串" ]
+      outputs: "字符串或毫秒 epoch"
+      behavioral_contract: |
+        本地时区的时刻格式化与解析，零浏览器 API 的纯函数，进 core 配 node:test。
+        toLocalInputValue：毫秒 → `YYYY-MM-DDTHH:mm:ss`（本地分量）。
+        parseLocalInputValue：`YYYY-MM-DDTHH:mm[:ss[.sss]]` → 毫秒；解析不出为 NaN。
+        formatLocalHms：毫秒 → `HH:MM:SS`（本地分量、补零）。
+        formatLocalIso：毫秒 → `YYYY-MM-DD HH:MM:SS`（本地分量，供导出成功文案）。
+        往返一致：parseLocalInputValue(toLocalInputValue(ms)) === ms（秒对齐的 ms）。
+      error_cases:
+        - { condition: "入参非有限数", behavior: "格式化类返回空串；解析类返回 NaN" }
+    - name: segmentStartIndices
+      inputs: [ "trackFiles: [{points}]" ]
+      outputs: "number[]"
+      behavioral_contract: |
+        各段在拼接后点序列里的起始索引：首段 0，第 k 段为前 k 段点数之和。
+        与 concatTrackPoints 是配套关系，同住 src/core/track-files.mjs。
+        非数组、空数组返回 []；缺 points 或 points 非数组的段按 0 点计。
+  dependencies: [T12]
+  reuse_candidates: |
+    time-mode.mjs 的 toLocalInputValue / parseLocalInputValue / pad2、preview.mjs 的
+    localHms / pad2、mp4.mjs 的 localIsoText 是同一批逻辑的三份实现；
+    分段起点累计在 time-mode.mjs 与 mp4-plan.mjs 逐字符重复两遍。本单元把它们收敛到 core。
+  acceptance: |
+    visible + hidden 全绿；三处调用点改为 import，模块内不再各自实现；
+    时区往返换算获得 core 层单测覆盖。
+
 ## Dependency Graph
 
 | 单元 | 文件 | 依赖 |

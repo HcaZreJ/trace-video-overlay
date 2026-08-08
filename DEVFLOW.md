@@ -24,17 +24,29 @@
 
 ## 静态断言够不着的部分怎么验
 
-canvas 像素、fetch 行为、交互链路这些测试断言碰不到，用无头 Chrome 实测：
+canvas 像素、fetch 行为、交互链路这些测试断言碰不到，用无头 Chrome 实测。
+凡是异步流程（载入文件、切模式、编码导出）都用 CDP 实时驱动：`--dump-dom` 在 load 事件时
+就抓快照，那一刻异步逻辑还没跑完，只会抓到初始状态。
+
+起服务与带调试端口的浏览器：
 
 ```
 python3 -m http.server 8137 &
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --disable-gpu \
-  --no-sandbox --virtual-time-budget=9000 --dump-dom http://localhost:8137/<harness>.html
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu \
+  --no-sandbox --remote-debugging-port=9222 --user-data-dir=/tmp/cdp-profile about:blank
 ```
 
-- 承载页放在仓库根、经同源 iframe 载入 `/index.html`，才能跨 frame 读 DOM 与 canvas。
-- 页面里有 `setInterval` 时 `--virtual-time-budget --dump-dom` 可能挂住，
-  改用 CDP `Runtime.evaluate` 配 `awaitPromise` 更稳。
+Node v22 自带 global `WebSocket`，零依赖即可驱动：`fetch http://localhost:9222/json` 取
+page target 的 `webSocketDebuggerUrl` → `Page.navigate` 到 `/index.html` →
+`Runtime.evaluate` 配 `awaitPromise: true` + `returnByValue: true` 执行验证脚本并取回结果。
+脚本跑在页面上下文里，`document` 就是应用本身，不需要 iframe 承载页。
+
+- 验证导出前先 `delete window.showSaveFilePicker`：无头环境弹不出「保存到哪」的对话框
+  也没人点，摘掉它让流程走全内存路径。
+- 拦下 `URL.createObjectURL` 与 `HTMLAnchorElement.prototype.click`，就能记下产物的类型、
+  字节数与文件名（`application/json` 的还可以 `blob.text()` 读出内容核对），不必真落盘。
+- 用真实文件驱动载入链路：`new DataTransfer()` 装一个 `File` 赋给 `#file` 的 `files`，
+  再派发 `change`，走的就是用户选文件的那条路径。
 - 渲染改动比对像素签名：非透明像素数 + FNV-1a 哈希 + 若干固定采样点 RGBA。
   载入 `sample-ride.gpx` 后 `#card` 的基线是 356696 像素 / FNV `2995975869`。
 

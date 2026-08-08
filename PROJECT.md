@@ -17,6 +17,10 @@
 | 定位点（预览实时叠加 + 通过按钮导出高清 PNG；尺寸语义 = 彩色核直径，dotGeometry 统一几何） | 已上线 |
 | 动画预览扫拨条（拖动 / 播放定位点沿线路运动，时长与 MP4 联动） | 已上线 |
 | MP4 动画导出（WebCodecs + vendored mp4-muxer，时长 clamp、导出中可取消、关页拦截） | 已上线 |
+| 时间真实模式 MP4 导出（定位点按轨迹时间戳走、停留段静止、可指定起止时刻与时间缩放、多文件段间空隙可折叠） | 已上线 |
+| 流式写盘导出（File System Access API，时长上限 6 小时；不支持的浏览器回落全内存 + 600 秒上限） | 已上线 |
+| 导出画质三档（high/medium/low，与分辨率交叉查表）+ 预计文件大小实时估算 | 已上线 |
+| 时间真实导出的 sidecar 元数据（文件名编码 `_t<epochSec>_s<scale>` + 同名 .json，供下游按真实时刻裁剪） | 已上线 |
 | 地图底图（segmented 纯色 / 地图切换、参数变化自动重拉、key 类型中文诊断与申请引导） | 已上线 |
 | 底图缺失时导出阻断（重试 / 一次性无底图导出） | 已上线 |
 | a11y 基线（label 关联、aria-live、键盘拖放区、focus-visible、主按钮对比度 ≥ 4.5:1） | 已上线 |
@@ -29,11 +33,16 @@
 - **`window.mapOverlayState`**：地图 overlay 的运行时状态（底图 Image、center、zoom、
   spanPx、viewScale、蒙层参数）；null 表示 overlay 未激活。
 - **帧渲染 opts**（`buildFrameOpts()`）：renderFrame 的全部参数快照，让 MP4 逐帧渲染与
-  DOM 解耦。
+  DOM 解耦；其中 `proj` 是预先算好的投影结果，逐帧复用。
+- **时间轴索引**（`buildTimeIndex()`）：`{ anchorTimes, anchorLens, totalLen, startMs, endMs,
+  droppedCount }`。带时间戳的点构成 `(时刻, 累计弧长)` 锚点序列，时刻与进度的双向换算都在
+  它上面插值。弧长用墨卡托平面距离，与画布像素弧长同度量。
+- **导出计划**（`resolveExportPlan()`）：一次导出的全部决策快照（模式、帧数、码率、
+  时长上限、产物名、时间窗口），让「导出什么」与「怎么编码」分家。
 
 ## 模块地图
 
-分层与依赖方向见 [PATTERNS.md](PATTERNS.md)。33 个模块，每个 200 行以内。
+分层与依赖方向见 [PATTERNS.md](PATTERNS.md)。39 个模块，每个 200 行以内。
 
 | 模块 | 职责 |
 |---|---|
@@ -48,12 +57,14 @@
 | `src/core/metrics.mjs` | 时长、均速、配速、爬升与其格式化 |
 | `src/core/color.mjs` | HEX / RGB / HSL / HSV 互转 |
 | `src/core/track-files.mjs` | 多文件首尾拼接、列表重排 |
-| `src/core/export-params.mjs` | 定位点几何 `dotGeometry`、MP4 时长夹取 `clampMp4Duration` |
+| `src/core/export-params.mjs` | 定位点几何 `dotGeometry`、时长夹取 `clampMp4Duration`、画质码率表、体积估算与格式化 |
+| `src/core/track-time.mjs` | 轨迹时间轴：时间范围、时间索引、时刻↔进度双向换算 |
+| `src/core/export-meta.mjs` | 时间真实产物的文件名编码与 sidecar 字段（跨 repo 契约） |
 | `src/parse/` | `index` 按扩展名分派 → `fit` · `geojson` · `csv` · `xml`（GPX/TCX/KML，依赖 DOMParser） |
 | `src/basemap/` | `diagnose` 高德错误码翻译 · `image` Blob 与 URL 两条解码路径 · `fetch` 取图与内存缓存 |
 | `src/render/` | `primitives` 描边与标记 · `card` renderCard 与 renderFrame · `dot` 定位点 |
-| `src/export/` | `status` 产物切换与状态条 · `png` 卡片与定位点下载 · `mp4` WebCodecs 编码管线 |
-| `src/ui/` | `preview` 重绘编排与动画播放 · `map-panel` 底图交互 · `track-panel` 轨迹列表 · `track-errors` 失败提示与撤销 · `controls` 滑杆联动 · `color-picker/` 四个模块 |
+| `src/export/` | `status` 产物切换与状态条 · `png` 卡片与定位点下载 · `mp4` WebCodecs 编码管线 · `mp4-sink` 流式/内存两条产物出口 · `mp4-opts` 帧参数与预投影 · `mp4-plan` 导出决策 |
+| `src/ui/` | `preview` 重绘编排与动画播放 · `map-panel` 底图交互 · `track-panel` 轨迹列表 · `track-errors` 失败提示与撤销 · `controls` 滑杆联动 · `time-mode` 时间真实模式状态与联动 · `color-picker/` 四个模块 |
 | `vendor/mp4-muxer.js` | 第三方 MP4 封装库，classic script 挂 `window.Mp4Muxer` |
 | `tests/unit/` | core 与 parse 纯逻辑的单测 |
 | `tests/visible/`、`tests/hidden/` | harness 盲测（实现 agent 只见 hidden 跑分） |

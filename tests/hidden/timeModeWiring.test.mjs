@@ -500,6 +500,18 @@ test('timeModeWiring · 文件约束: 改动后的两个文件通过语法闸门
   }
 });
 
+test('timeModeWiring · main(扫拨条): 拖动扫拨条要刷新标签', () => {
+  // 时间真实模式下标签显示的是当前进度对应的真实时刻，拖动扫拨条必须让它跟着走。
+  // 匀速模式的标签不随进度变化，所以这条只有在时间真实模式下才看得出来。
+  assertWired(MAIN, {
+    label: '#previewProgress 的 input',
+    anchor: idAnchor('previewProgress'),
+    id: 'previewProgress',
+    events: ['input'],
+    fns: ['updatePreviewScrubLabel'],
+  });
+});
+
 test('timeModeWiring · track-panel(轨迹变动): 重算与清空后都刷新扫拨条标签', () => {
   // 时间真实模式下扫拨条标签显示的是当前进度对应的真实时刻，它依赖时间索引。
   // 换一条轨迹后索引重建，标签必须跟着刷新，否则会停在上一条轨迹的时刻上。

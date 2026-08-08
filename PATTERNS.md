@@ -47,6 +47,9 @@ ES module 的导入绑定是只读的，所以多个模块共读共写的状态�
   status 写、png 与 mp4 读并消费。
 - `pickerState`（`src/ui/color-picker/index.mjs`）—— 取色器自身的界面状态，
   在定义它的模块内以 `state` 之名使用，跨模块以 `pickerState` 之名导出以免与应用状态混淆。
+- `timeMode`（`src/ui/time-mode.mjs`）—— 当前轨迹的时间轴（`index` · `range`）与时间真实模式
+  可用性（`available`），`ui/preview` 与 `export/mp4-plan` 共读。轨迹一变就由
+  `refreshTimeMode()` 整体重算，改的始终是属性、不重新赋值绑定。
 - `window.mapOverlayState` —— 地图 overlay 运行时状态，挂 window 便于浏览器控制台手测。
 
 只服务单一模块的可变量用普通 `let` 留在那个模块里（如 `mp4CancelRequested`
@@ -70,12 +73,50 @@ ES module 的导入绑定是只读的，所以多个模块共读共写的状态�
 - `renderCard`（读控件取值，服务预览与 PNG）与 `renderFrame`（收 opts 对象，服务 MP4 逐帧）
   画同一幅画，同处 `src/render/card.mjs`；改渲染行为时两处同步。
   取参形态不同：`buildFrameOpts()` 把控件取值快照成 opts，让逐帧渲染与 DOM 解耦。
+- `renderFrame` 收可选的 `opts.proj`：投影在整个导出期间是常量，由调用方算一次逐帧复用
+  （一次导出可达数十万帧，重复投影是主要热点）。给了就原样送去描线，不再平滑或缩放；
+  没给就自行投影，行为与不带这个字段时逐字符相同。`renderCard` 不收它——预览每次只渲一帧。
+- 两个渲染函数对空轨迹给出同一种判断：`state.trackPoints` 为 `null` 与为空数组一律直接返回
+  （`renderCard` 走空状态分支）。解析器对无法识别的文件产出空点数组，拼接后可能得到 `[]`。
 - 尺寸滑块语义统一为「彩色核直径」（600 基准像素）：起终点标记 `r=size/2`，定位点几何
   全部由 `dotGeometry(size)` 导出（coreR/ringW/outerR/pad/full/阴影），同数值 → 彩色核同大；
   渲染层出现定位点的三处（renderCard 预览、renderFrame、renderDot）统一走 dotGeometry。
 - 地图 overlay 对齐模型：底图与轨迹共享同一 world→canvas 仿射变换
   `canvasPx = (worldPx(mercZoom) − centerPx) × k + size/2`，k 由
   `computeOverlayScale` 连续计算——对齐靠数学，UI 控件只调取景。
+
+## 时间轴与进度
+
+定位点的位置一律由 `progress ∈ [0,1]` 决定，`progress` 是**沿弧长的比例**。两种模式只是
+progress 的来源不同：按距离匀速时 `progress = 帧号 / (总帧数 - 1)`，按真实时间时
+`progress = progressAtTime(index, 该帧对应的真实时刻)`。渲染层因此完全不必知道有模式这回事。
+
+- **度量一致性**是这套换算正确性的根：`progressAtTime` 的累计弧长必须用**墨卡托平面距离**，
+  因为下游 `pointAtProgress` 按画布像素弧长定位，而画布坐标是墨卡托坐标的等比仿射变换，
+  两者的比例严格相等。换成大圆距离会引入随纬度变化的漂移。
+- **锚点序列**：累计弧长对全部点计算，只有带有效时间戳的点成为 `(时刻, 累计弧长)` 锚点。
+  部分点缺时间戳不破坏比例——它们照样贡献弧长。
+- **停留段自然静止**：停留期间弧长增量为 0，锚点上表现为时刻推进而弧长不变，
+  插值结果恒定。无需特殊分支。
+- **段间空隙折叠**把后一段首锚点接到前一段末锚点 **+1ms**，而非与之相等：相等会造出重复
+  时刻被严格递增规则丢弃，既污染 `droppedCount`（它只该反映数据自身乱序），
+  又让跨段跳跃摊进后一段的第一个采样间隔、令段内速度失真。
+- **零长度轨迹**（全部点重合）的规则**优先于**边界规则：任何时刻都返回进度 0、
+  任何进度都返回起始时刻。
+
+## 导出产物出口
+
+MP4 的封装出口由 `createMp4Sink()` 抽象成两条路径，编码循环只认它返回的
+`{ target, fastStart, finish, abort }`，不关心产物最终落到哪：
+
+- **流式写盘**：`showSaveFilePicker` 取得文件句柄 → `FileSystemWritableFileStreamTarget`，
+  配 `fastStart: false`（moov 写在末尾），时长上限 6 小时。
+- **全内存**：`ArrayBufferTarget` 配 `fastStart: 'in-memory'`，`finish` 时造 Blob 下载，
+  时长上限 600 秒。
+
+`showSaveFilePicker` 要求 user activation，所以 `createMp4Sink` 必须是导出流程里**第一个
+await**——一旦先 await 了补拉底图的网络请求，手势就过期、保存框会被浏览器拒绝。
+用户在保存框点取消时抛的 `AbortError` 原样上抛，由调用方识别为「主动取消」而非失败。
 
 ## 颜色选择器
 - 全站色块（`.cp-swatch`）触发同一个自定义 popup 组件，原生 `<input type="color">`

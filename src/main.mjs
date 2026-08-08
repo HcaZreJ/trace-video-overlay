@@ -40,7 +40,7 @@ $('previewPlay').addEventListener('click', () => {
 $('previewProgress').addEventListener('input', () => {
   if(previewPlaying) stopPreviewPlay();
   state.previewProgress = (+$('previewProgress').value) / 1000;
-  render();
+  updatePreviewScrubLabel(); render(); // 时间真实模式下标签显示的是当前进度对应的真实时刻
 });
 $('mapPreview').addEventListener('click', onPreviewMapOverlay);
 const drop=$('drop');
