@@ -84,6 +84,12 @@ function setup({ els: overrides = {}, trackFiles = [], trackPoints = [], timeMod
   timeMode.range = null;
   timeMode.available = false;
   Object.assign(timeMode, tm);
+  // 假索引写成占位空对象时按 range 补齐端点：真实索引一定带端点，
+  // 且单段不折叠时两者相同。
+  if (timeMode.index && timeMode.range && timeMode.index.startMs === undefined) {
+    timeMode.index.startMs = timeMode.range.startMs;
+    timeMode.index.endMs = timeMode.range.endMs;
+  }
 
   return {
     els,

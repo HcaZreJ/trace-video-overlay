@@ -497,13 +497,14 @@ test('previewScrub · updatePreviewScrubLabel(扫拨标签): 时分秒各补两�
     endMs: BASE_MS + 60_000,
     scale: 1,
     duration: 6,
-    // 退化索引：totalLen 为 0 时任何 progress 都落在 startMs
+    // 零长度索引：totalLen 为 0 时任何 progress 都落在 startMs，时刻因此恒定。
+    // 端点本身不退化成同一时刻——导出窗口按索引端点夹取，start === end 会让窗口算不出来。
     index: {
       anchorTimes: [single],
       anchorLens: [0],
       totalLen: 0,
       startMs: single,
-      endMs: single,
+      endMs: single + 60_000,
       droppedCount: 0,
     },
     progress: 0.73,

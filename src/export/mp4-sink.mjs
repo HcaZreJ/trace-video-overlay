@@ -35,6 +35,9 @@ export async function createMp4Sink(options) {
       kind: 'stream',
       target,
       fastStart: false,
+      // showSaveFilePicker 只把 suggestedName 当建议，用户可以改名：回传实际保存名，
+      // 让 sidecar 跟着落成同名 .json。
+      savedName: handle && typeof handle.name === 'string' && handle.name ? handle.name : null,
       // 文件名在保存框选定时已确定，这里只收尾可写流。
       async finish() {
         await writable.close();
@@ -52,6 +55,8 @@ export async function createMp4Sink(options) {
     kind: 'memory',
     target,
     fastStart: 'in-memory',
+    // 内存路径的文件名由 finish(name) 决定，落盘之前不存在「实际保存名」。
+    savedName: null,
     async finish(name) {
       triggerBlobDownload(new Blob([target.buffer], { type: 'video/mp4' }), name);
     },

@@ -35,8 +35,10 @@ export function resolveExportPlan() {
       collapseSegmentGaps: win.collapseSegmentGaps,
       startMs: win.startMs,
       endMs: win.endMs,
-      scale: +$('mp4TimeScale').value,
-      fps: +$('mp4TrueFps').value,
+      // 缩放与帧率一律取 currentExportWindow() 已消毒的值：控件清空或填负数时
+      // 那里已经兜成 1 与 30，再读一次生控件会把非法值放进来。
+      scale: win.scale,
+      fps: win.fps,
     });
     if (timePlan) {
       // 帧数按夹取后的时长重算：超上限时这次导出被截断，而不是溢出成装不下的文件。

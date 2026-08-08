@@ -6,7 +6,14 @@ export function concatTrackPoints(trackFiles) {
 }
 // segmentStartIndices：各段在拼接后点序列里的起始索引，与 concatTrackPoints 配套。
 export function segmentStartIndices(trackFiles) {
-  throw new Error('NotImplementedError: segmentStartIndices');
+  if (!Array.isArray(trackFiles)) return [];
+  const starts = [];
+  let acc = 0;
+  for (const f of trackFiles) {
+    starts.push(acc);
+    acc += f && Array.isArray(f.points) ? f.points.length : 0;
+  }
+  return starts;
 }
 
 // act ∈ {'up','down','del'}；返回重排/删除后的新数组，不改动入参。

@@ -9,7 +9,7 @@ import { createMp4Sink, downloadSidecar } from './mp4-sink.mjs';
 import { resolveExportPlan, frameProgress, formatEta, buildExportSidecar } from './mp4-plan.mjs';
 import { buildFrameOpts } from './mp4-opts.mjs';
 import { exportState, setExportStatus, setExportKindLocked, showExportBlockedStatus } from './status.mjs';
-import { timeMode, currentExportWindow } from '../ui/time-mode.mjs';
+import { timeMode, isTimeTrueMode, currentExportWindow } from '../ui/time-mode.mjs';
 import { onPreviewMapOverlay } from '../ui/map-panel.mjs';
 import { stopPreviewPlay } from '../ui/preview.mjs';
 
@@ -57,8 +57,14 @@ async function exportMp4(){
   stopPreviewPlay();
   const skipBasemap = exportState.forceNoBasemap;
   exportState.forceNoBasemap = false;
-  if(!state.trackPoints||!mp4Supported()) return;
+  // 解析器对无法识别的文件产出空点数组，拼接后可能得到 []：与渲染层一样认空数组。
+  if(!state.trackPoints||state.trackPoints.length===0||!mp4Supported()) return;
   const plan = resolveExportPlan();
+  // 时间真实模式却拿不到时间真实计划：在弹保存框之前就停下并说清原因，不静默降级成匀速。
+  if(isTimeTrueMode()&&plan.mode!=='true'){
+    setExportStatus('导出已中止：算不出可用的导出时间窗口，请检查起始与结束时刻','error');
+    return;
+  }
 
   // 保存框要求 user activation：产物出口抢在补拉底图的网络请求之前建立，
   // 先等别的异步会让手势过期，浏览器随即拒绝弹出保存框。
@@ -66,8 +72,8 @@ async function exportMp4(){
   try{
     sink = await createMp4Sink({ suggestedName: plan.suggestedName, preferStream: plan.preferStream });
   }catch(err){
-    // 用户在保存框点取消：静默结束，界面维持原样。
-    if(err&&err.name==='AbortError') return;
+    // 用户在保存框点取消：这次导出没有发生，归还一次性的无底图开关，界面维持原样。
+    if(err&&err.name==='AbortError'){ exportState.forceNoBasemap = skipBasemap; return; }
     setExportStatus('导出失败：'+(err&&err.message?err.message:String(err)),'error');
     return;
   }
@@ -85,28 +91,30 @@ async function exportMp4(){
   const size=plan.size;
   const fps=plan.fps;
   const frames=plan.frames;
-  const opts=buildFrameOpts({ skipBasemap, size: plan.size });
-
-  const off=document.createElement('canvas');
-  off.width=off.height=size;
-  const offCtx=off.getContext('2d');
-
-  mp4ExportInProgress = true;
-  mp4CancelRequested = false;
-  btn.textContent = '取消导出';
-  $('expCard').disabled = true;
-  $('expDot').disabled = true;
-  setExportKindLocked(true);
-  setMp4BeforeUnloadGuard(true);
-  setExportStatus('', 'clear');
-  $('mp4ProgressWrap').style.display='';
-  $('mp4Progress').value=0; $('mp4Progress').max=frames;
-  $('mp4ProgressV').textContent='0%';
-  $('mp4Eta').textContent='';
 
   let encoder=null;
   let cancelled=false;
   try{
+    // 帧参数快照会走带参数校验的投影：连同界面锁定一并纳入 try，
+    // 抛错时才能走到 sink.abort() 与 finally 的界面复位。
+    const opts=buildFrameOpts({ skipBasemap, size: plan.size });
+    const off=document.createElement('canvas');
+    off.width=off.height=size;
+    const offCtx=off.getContext('2d');
+
+    mp4ExportInProgress = true;
+    mp4CancelRequested = false;
+    btn.textContent = '取消导出';
+    $('expCard').disabled = true;
+    $('expDot').disabled = true;
+    setExportKindLocked(true);
+    setMp4BeforeUnloadGuard(true);
+    setExportStatus('', 'clear');
+    $('mp4ProgressWrap').style.display='';
+    $('mp4Progress').value=0; $('mp4Progress').max=frames;
+    $('mp4ProgressV').textContent='0%';
+    $('mp4Eta').textContent='';
+
     const codec=await pickMp4Codec(size,fps,plan.bitrate);
     if(!codec) throw new Error('当前浏览器不支持所需的 H.264 编码，请使用最新版 Chrome / Edge，或较新版本的 Safari');
 
@@ -152,17 +160,24 @@ async function exportMp4(){
     muxer.finalize();
     await sink.finish(plan.suggestedName);
 
+    // 保存框只把 suggestedName 当建议，用户可以改名：文案与 sidecar 都跟实际保存名走。
+    const savedName=sink.savedName||plan.suggestedName;
     if(plan.mode==='true'){
       const win=currentExportWindow();
-      downloadSidecar(buildExportSidecar(plan,{
-        trackStartMs: timeMode.range ? timeMode.range.startMs : null,
-        trackEndMs: timeMode.range ? timeMode.range.endMs : null,
-        sourceFiles: (Array.isArray(state.trackFiles)?state.trackFiles:[]).map(f=>f&&f.name),
-        collapsedSegmentGaps: !!(win&&win.collapseSegmentGaps),
-      }), buildTimeTrueFilename(plan.t0Ms, plan.scale, 'json'));
-      setExportStatus(`已导出「${plan.suggestedName}」· 起点 ${localIsoText(plan.t0Ms)} · 缩放 ${plan.scale}`,'success');
+      // MP4 已经落盘，sidecar 失败只在成功文案后追加一句提示，不改写成导出失败。
+      let note='';
+      try{
+        downloadSidecar(buildExportSidecar(plan,{
+          trackStartMs: timeMode.range ? timeMode.range.startMs : null,
+          trackEndMs: timeMode.range ? timeMode.range.endMs : null,
+          sourceFiles: (Array.isArray(state.trackFiles)?state.trackFiles:[]).map(f=>f&&f.name),
+          collapsedSegmentGaps: !!(win&&win.collapseSegmentGaps),
+        }), sink.savedName ? sink.savedName.replace(/\.[^.]*$/,'')+'.json'
+          : buildTimeTrueFilename(plan.t0Ms, plan.scale, 'json'));
+      }catch(e){ console.error(e); note=' · 元数据文件未能保存'; }
+      setExportStatus(`已导出「${savedName}」· 起点 ${localIsoText(plan.t0Ms)} · 缩放 ${plan.scale}${note}`,'success');
     }else{
-      setExportStatus('已下载「轨迹动画.mp4」','success');
+      setExportStatus(`已下载「${savedName}」`,'success');
     }
   }catch(err){
     console.error(err);

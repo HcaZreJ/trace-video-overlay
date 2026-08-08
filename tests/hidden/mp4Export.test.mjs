@@ -532,7 +532,10 @@ test('mp4Export · resolveExportPlan(导出决策): buildTimeTruePlan 拿不出�
   );
 });
 
-test('mp4Export · resolveExportPlan(导出决策): 非法缩放的 RangeError 不被吞掉', () => {
+test('mp4Export · resolveExportPlan(导出决策): 非法缩放在窗口那层已被消毒，决策层不抛错', () => {
+  // 缩放控件清空或填 0 时，currentExportWindow 兜底成 1；决策层直接用窗口给的值，
+  // 于是那条会抛 RangeError 的路径从界面上不可达——否则点导出会毫无反应
+  // （异常跑到异步流程之外，既没有状态提示也没有进度条）。
   const points = straightTrack();
   withEnv(
     {
@@ -543,22 +546,10 @@ test('mp4Export · resolveExportPlan(导出决策): 非法缩放的 RangeError �
       timeMode: trueModeState(points),
     },
     () => {
-      let thrown = null;
       let plan = null;
-      try {
-        plan = resolveExportPlan();
-      } catch (err) {
-        thrown = err;
-      }
-      if (thrown) {
-        assert.ok(thrown instanceof RangeError, '非法缩放抛出的异常应当原样上抛为 RangeError');
-      } else {
-        assert.equal(
-          plan.mode,
-          'even',
-          '没有异常时说明窗口挡下了非法缩放，此时必须回落匀速而不是产出 true 计划'
-        );
-      }
+      assert.doesNotThrow(() => { plan = resolveExportPlan(); }, '非法缩放不该让决策层抛错');
+      assert.equal(plan.mode, 'true', '窗口仍然算得出来，模式不该回落匀速');
+      assert.equal(plan.scale, 1, '缩放应当是窗口兜底后的 1');
     }
   );
 });

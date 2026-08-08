@@ -91,6 +91,13 @@ function setup({
   timeMode.range = null;
   timeMode.available = false;
   Object.assign(timeMode, tm);
+  // 用例里的假索引常写成占位空对象。真实的 buildTimeIndex 结果一定带端点，
+  // 且单段不折叠时它与 range 的端点相同——折叠开启才会短于 range。这里按此补齐，
+  // 免得每个用例都重复写一遍端点。
+  if (timeMode.index && timeMode.range && timeMode.index.startMs === undefined) {
+    timeMode.index.startMs = timeMode.range.startMs;
+    timeMode.index.endMs = timeMode.range.endMs;
+  }
 
   return {
     els,
@@ -673,7 +680,8 @@ test('uiTimeMode · updateTimeModeUI(超限提示): 视频时长超 600 秒且�
   try {
     updateTimeModeUI();
     const text = env.els.mp4SizeHint.textContent;
-    assert.ok(text.startsWith(sizeHintText(1200, 1080, 'high')), `体积文案在前，实得：${text}`);
+    // 体积按实际会导出的时长算：1200 秒超过内存路径 600 秒的上限，被夹取后才是产物的真实长度。
+    assert.ok(text.startsWith(sizeHintText(600, 1080, 'high')), `体积文案在前，实得：${text}`);
     assert.match(text, new RegExp(OVERFLOW_NOTE));
     assert.match(text, /请缩小时间范围或调大时间缩放/);
   } finally {

@@ -3,7 +3,7 @@
 // ES module 的导入绑定只读，所以挂成对象属性。
 import { trackTimeRange, buildTimeIndex } from '../core/track-time.mjs';
 import { clampMp4Duration, mp4Bitrate, estimateMp4Bytes, formatByteSize } from '../core/export-params.mjs';
-import { streamSinkSupported, MP4_MAX_DURATION_MEMORY } from '../export/mp4-sink.mjs';
+import { streamSinkSupported, MP4_MAX_DURATION_STREAM, MP4_MAX_DURATION_MEMORY } from '../export/mp4-sink.mjs';
 import { state } from '../state.mjs';
 import { $ } from '../dom.mjs';
 
@@ -86,8 +86,10 @@ export function refreshTimeMode() {
   $('mp4CollapseGapsField').style.display = files.length > 1 ? '' : 'none';
 
   if (timeMode.available) {
-    const startText = toLocalInputValue(timeMode.range.startMs);
-    const endText = toLocalInputValue(timeMode.range.endMs);
+    // 界面窗口按 timeMode.index 的端点取值：折叠开启后实际生效的是折叠过的时间轴，
+    // 被折叠掉的空隙不该出现在可选范围里。
+    const startText = toLocalInputValue(timeMode.index.startMs);
+    const endText = toLocalInputValue(timeMode.index.endMs);
     const startEl = $('mp4TimeStart');
     const endEl = $('mp4TimeEnd');
     startEl.min = startText;
@@ -111,26 +113,35 @@ export function updateTimeModeUI() {
   const timeTrue = isTimeTrueMode();
   $('mp4TrueFields').style.display = timeTrue ? '' : 'none';
   $('mp4EvenFields').style.display = timeTrue ? 'none' : '';
+  // .seg-opt 的选中态纯 JS 驱动，样式表里没有 :checked 兜底规则。
+  $('mp4TimeModeEvenLabel')?.classList.toggle('active', !timeTrue);
+  $('mp4TimeModeTrueLabel')?.classList.toggle('active', timeTrue);
 
-  let durationSec;
+  // 上限随流式可用性变化，与实际导出取同一个值。
+  const maxDurationSec = streamSinkSupported() ? MP4_MAX_DURATION_STREAM : MP4_MAX_DURATION_MEMORY;
+  let durationSec;  // 提示语里的视频时长：照实说，超限与否由下面的说明文案表达
+  let sizeSec;      // 体积估算用的时长：与实际导出一致地按上限夹取
   if (timeTrue) {
     const win = currentExportWindow();
     if (win) {
       const realSec = (win.endMs - win.startMs) / 1000;
       durationSec = realSec / win.scale;
+      sizeSec = clampMp4Duration(durationSec, maxDurationSec);
       $('mp4TrueDurationHint').textContent =
         `视频时长 ${formatClock(durationSec)} · 真实时间 ${formatClock(realSec)}`;
     } else {
       durationSec = 0;
+      sizeSec = 0;
       $('mp4TrueDurationHint').textContent = '视频时长 —（起止时刻无效，请调整时间范围）';
     }
   } else {
-    durationSec = clampMp4Duration(+$('mp4Duration').value);
+    durationSec = clampMp4Duration(+$('mp4Duration').value, maxDurationSec);
+    sizeSec = durationSec;
   }
 
   // 分辨率经 + 转成数值：mp4Bitrate 按数值查表，字符串会落进「size 非法」分支。
   const bitrate = mp4Bitrate(+$('exportRes').value, $('mp4Quality').value);
-  let sizeText = `预计文件大小 ≈ ${formatByteSize(estimateMp4Bytes(durationSec, bitrate))}`;
+  let sizeText = `预计文件大小 ≈ ${formatByteSize(estimateMp4Bytes(sizeSec, bitrate))}`;
   if (timeTrue && durationSec > MP4_MAX_DURATION_MEMORY && !streamSinkSupported()) {
     sizeText += `（当前浏览器一次最多导出 ${MP4_MAX_DURATION_MEMORY} 秒，请缩小时间范围或调大时间缩放）`;
   }
@@ -142,13 +153,17 @@ export function currentExportWindow() {
   if (!isTimeTrueMode()) return null;
   const range = timeMode.range;
   if (!range) return null;
+  // 边界取折叠后实际生效的那条时间轴，与 buildTimeTruePlan 的 clamp 基准一致。
+  const index = timeMode.index || {};
+  const lowMs = Number.isFinite(index.startMs) ? index.startMs : range.startMs;
+  const highMs = Number.isFinite(index.endMs) ? index.endMs : range.endMs;
 
   let startMs = parseLocalInputValue($('mp4TimeStart').value);
   let endMs = parseLocalInputValue($('mp4TimeEnd').value);
-  if (!Number.isFinite(startMs)) startMs = range.startMs;
-  if (!Number.isFinite(endMs)) endMs = range.endMs;
-  startMs = Math.min(Math.max(startMs, range.startMs), range.endMs);
-  endMs = Math.min(Math.max(endMs, range.startMs), range.endMs);
+  if (!Number.isFinite(startMs)) startMs = lowMs;
+  if (!Number.isFinite(endMs)) endMs = highMs;
+  startMs = Math.min(Math.max(startMs, lowMs), highMs);
+  endMs = Math.min(Math.max(endMs, lowMs), highMs);
   if (startMs >= endMs) return null;
 
   let scale = +$('mp4TimeScale').value;
