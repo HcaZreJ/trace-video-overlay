@@ -6,7 +6,8 @@ import { parseTrackFile } from '../parse/index.mjs';
 import { state } from '../state.mjs';
 import { $ } from '../dom.mjs';
 import { mp4Supported } from '../export/mp4.mjs';
-import { render, stopPreviewPlay } from './preview.mjs';
+import { render, stopPreviewPlay, updatePreviewScrubLabel } from './preview.mjs';
+import { refreshTimeMode, updateTimeModeUI } from './time-mode.mjs';
 import { setMapStatus, markOverlayNeedsRefresh, onPreviewMapOverlay } from './map-panel.mjs';
 import { clearTrackErrors, showTrackErrors, clearTrackUndo, showTrackUndo } from './track-errors.mjs';
 
@@ -57,6 +58,10 @@ export function recomputeTrack(){
   }
   render();
   markOverlayNeedsRefresh();
+  // 换了轨迹，时间轴要重建；扫拨条标签在时间真实模式下显示的时刻依赖这个索引，一并刷新
+  refreshTimeMode();
+  updateTimeModeUI();
+  updatePreviewScrubLabel();
 }
 function renderFileList(){
   const el=$('fileList'); el.textContent='';
@@ -105,4 +110,7 @@ function clearTrack(){
   setTrackGate(false);
   renderFileList();
   render();
+  refreshTimeMode();
+  updateTimeModeUI();
+  updatePreviewScrubLabel();
 }

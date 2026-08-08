@@ -23,6 +23,7 @@ import {
   updateMapModeFieldsUI,
 } from './ui/map-panel.mjs';
 import { setTrackGate, loadTrackFiles, trackFileAction } from './ui/track-panel.mjs';
+import { refreshTimeMode, updateTimeModeUI } from './ui/time-mode.mjs';
 import { bind, initColorHexLabels } from './ui/controls.mjs';
 import { initColorPickers } from './ui/color-picker/index.mjs';
 
@@ -39,7 +40,7 @@ $('previewPlay').addEventListener('click', () => {
 $('previewProgress').addEventListener('input', () => {
   if(previewPlaying) stopPreviewPlay();
   state.previewProgress = (+$('previewProgress').value) / 1000;
-  render();
+  updatePreviewScrubLabel(); render(); // 时间真实模式下标签显示的是当前进度对应的真实时刻
 });
 $('mapPreview').addEventListener('click', onPreviewMapOverlay);
 const drop=$('drop');
@@ -85,12 +86,15 @@ initColorHexLabels();
 $('expCard').onclick=exportCard;
 $('expDot').onclick=exportDot;
 $('expMp4').onclick=onExpMp4Click;
-$('exportRes').addEventListener('change',render);
-$('mp4Duration').addEventListener('input',updatePreviewScrubLabel);
-$('mp4Duration').addEventListener('change',()=>{
-  $('mp4Duration').value = clampMp4Duration(+$('mp4Duration').value);
-  updatePreviewScrubLabel();
-});
+const timeUI=()=>{ updatePreviewScrubLabel(); updateTimeModeUI(); }; // 导出参数改了：预览刻度与时长/体积提示一起刷
+$('exportRes').addEventListener('change',()=>{ render(); updateTimeModeUI(); });
+$('mp4Duration').addEventListener('input',timeUI);
+$('mp4Duration').addEventListener('change',()=>{ $('mp4Duration').value = clampMp4Duration(+$('mp4Duration').value); timeUI(); });
+for(const ev of ['input','change']) for(const id of ['mp4TimeStart','mp4TimeEnd','mp4TimeScale']) $(id).addEventListener(ev,timeUI);
+$('mp4TrueFps').addEventListener('change',timeUI);
+$('mp4Quality').addEventListener('change',()=>updateTimeModeUI());
+$('mp4CollapseGaps').addEventListener('change',()=>{ refreshTimeMode(); timeUI(); }); // 折叠改的是时间轴本身，索引要重建
+document.querySelectorAll('input[name=mp4TimeMode]').forEach(el=>el.addEventListener('change',()=>{ timeUI(); render(); }));
 $('mp4BgMode').addEventListener('change',()=>{
   const green=$('mp4BgMode').value==='green';
   $('mp4PageColorField').style.display=green?'none':'';
@@ -165,6 +169,7 @@ document.querySelectorAll('input[name=mapOverlayMode]').forEach(el => {
 updateBgModeUI();
 updateMapModeFieldsUI();
 updateExportKindUI();
+refreshTimeMode(); updateTimeModeUI();
 updatePreviewScrubLabel();
 if(!mp4Supported()) $('mp4UnsupportedHint').style.display='';
 setTrackGate(false);

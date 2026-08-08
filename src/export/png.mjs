@@ -19,7 +19,8 @@ function download(canvas,filename,onDone){
 export async function exportCard(){
   const skipBasemap = exportState.forceNoBasemap;
   exportState.forceNoBasemap = false;
-  if(!state.trackPoints) return;
+  // 解析器对无法识别的文件产出空点数组，拼接后可能得到 []：与渲染层一样认空数组。
+  if(!state.trackPoints||state.trackPoints.length===0) return;
   const mapActive = $('mapOverlay').checked;
   if(mapActive && !skipBasemap && (!window.mapOverlayState || state.mapOverlayNeedsRefresh)){
     try { await onPreviewMapOverlay(); } catch(_) { /* onPreviewMapOverlay 已内部 catch，这里无 throw */ }
@@ -43,7 +44,7 @@ export async function exportCard(){
   download(c,'轨迹卡片.png',()=>setExportStatus('已下载「轨迹卡片.png」','success'));
 }
 export function exportDot(){
-  if(!state.trackPoints) return;
+  if(!state.trackPoints||state.trackPoints.length===0) return;
   const off=document.createElement('canvas');
   const dotExportPx = Math.round(+$('dotSize').value * (+$('exportRes').value||1080) / CARD_SIZE);
   try {

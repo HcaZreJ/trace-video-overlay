@@ -225,20 +225,68 @@
 
       <div id="exportMp4Fields" style="display:none">
         <small class="gate-hint" id="mp4UnsupportedHint" style="display:none">当前浏览器不支持视频编码，导出 MP4 需要新版 Chrome / Edge / Safari</small>
-        <div class="row">
-          <div class="field">
-            <label for="mp4Duration">时长（秒）</label>
-            <input type="number" id="mp4Duration" class="val" min="1" max="600" step="0.5" value="6">
-            <small>最长 600 秒；1080p 的文件大小约为每分钟 90 MB</small>
+        <div class="segmented" id="mp4TimeModeSegmented" role="radiogroup" aria-label="动画节奏">
+          <label class="seg-opt" id="mp4TimeModeEvenLabel"><input type="radio" name="mp4TimeMode" id="mp4TimeModeEven" value="even" checked> 按距离匀速</label>
+          <label class="seg-opt" id="mp4TimeModeTrueLabel"><input type="radio" name="mp4TimeMode" id="mp4TimeModeTrue" value="true"> 按真实时间</label>
+        </div>
+        <small class="gate-hint" id="mp4TimeModeHint" style="display:none"></small>
+        <div id="mp4EvenFields">
+          <div class="row">
+            <div class="field">
+              <label for="mp4Duration">时长（秒）</label>
+              <input type="number" id="mp4Duration" class="val" min="1" max="600" step="0.5" value="6">
+              <small>最长 600 秒；1080p 的文件大小约为每分钟 90 MB</small>
+            </div>
+            <div class="field">
+              <label for="mp4Fps">帧率</label>
+              <select id="mp4Fps">
+                <option value="24">24</option>
+                <option value="30" selected>30</option>
+                <option value="60">60</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="mp4TrueFields" style="display:none">
+          <div class="row">
+            <div class="field">
+              <label for="mp4TimeStart">起始时刻</label>
+              <input type="datetime-local" id="mp4TimeStart" step="1">
+              <small>默认取轨迹里最早的时间戳</small>
+            </div>
+            <div class="field">
+              <label for="mp4TimeEnd">结束时刻</label>
+              <input type="datetime-local" id="mp4TimeEnd" step="1">
+              <small>默认取轨迹里最晚的时间戳</small>
+            </div>
           </div>
           <div class="field">
-            <label for="mp4Fps">帧率</label>
-            <select id="mp4Fps">
+            <label for="mp4TimeScale">时间缩放（倍速）</label>
+            <input type="number" id="mp4TimeScale" class="val" min="0.1" max="100" step="0.1" value="1">
+            <small>1 = 1 秒视频对应 1 秒真实时间；60 = 1 秒视频对应 60 秒真实时间</small>
+          </div>
+          <div class="field" id="mp4CollapseGapsField" style="display:none">
+            <label class="check" for="mp4CollapseGaps"><input type="checkbox" id="mp4CollapseGaps"> 折叠多个文件之间的时间空隙</label>
+            <small>多段轨迹之间的空档不占用视频时长</small>
+          </div>
+          <div class="field">
+            <label for="mp4TrueFps">帧率</label>
+            <select id="mp4TrueFps">
               <option value="24">24</option>
               <option value="30" selected>30</option>
               <option value="60">60</option>
             </select>
           </div>
+          <small class="gate-hint" id="mp4TrueDurationHint"></small>
+        </div>
+        <div class="field">
+          <label for="mp4Quality">画质</label>
+          <select id="mp4Quality">
+            <option value="high" selected>高</option>
+            <option value="medium">中</option>
+            <option value="low">低</option>
+          </select>
+          <small id="mp4SizeHint"></small>
         </div>
         <div class="row">
           <div class="field">
@@ -276,7 +324,7 @@
 
     <div class="export-actions needs-track" data-gate>
       <div class="field" id="mp4ProgressWrap" style="display:none">
-        <label for="mp4Progress">导出进度 <span id="mp4ProgressV">0%</span></label>
+        <label for="mp4Progress">导出进度 <span id="mp4ProgressV">0%</span><span id="mp4Eta"></span></label>
         <progress id="mp4Progress" value="0" max="100" style="width:100%"></progress>
       </div>
       <div class="hint" id="exportStatus" aria-live="polite" style="display:none"></div>

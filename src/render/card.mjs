@@ -12,7 +12,8 @@ export function renderCard(canvas,size,opts={}){
   const ctx=canvas.getContext('2d');
   canvas.width=canvas.height=size;
   ctx.clearRect(0,0,size,size);
-  if(!state.trackPoints){
+  // 空轨迹数组与 null 同判：解析器对无法识别的文件产出空点数组，拼接后可能得到 []
+  if(!state.trackPoints||state.trackPoints.length===0){
     const emptyScale=size/CARD_SIZE;
     ctx.save();
     ctx.fillStyle='#8a93a2';
@@ -100,12 +101,15 @@ export function renderCard(canvas,size,opts={}){
 }
 // 逐帧渲染（MP4 导出用）：整帧不透明背景 + 全线常显 + 定位点走到 progress 处。
 // 复用 projectTrack/strokePath/drawMarker/pointAtProgress；参数全部来自 opts（便于逐帧/离屏，不读 DOM）。
+// opts.proj 给出预投影结果（{points,fullSize}）时原样采用，跳过本函数内的投影计算；
+// 缺省时自行投影。分支与来源的匹配由调用方保证。
 export function renderFrame(ctx,size,progress,opts){
   const scale=size/CARD_SIZE;
   const radius=opts.radius*scale, pad=opts.pad*scale, lineWidth=opts.lineWidth*scale;
 
   ctx.clearRect(0,0,size,size);
-  if(!state.trackPoints) return;
+  // 空轨迹数组与 null 同判：与 renderCard 的守卫同构
+  if(!state.trackPoints||state.trackPoints.length===0) return;
 
   // 背景第一层：整帧不透明（MP4 无 alpha，避免透出黑）
   ctx.fillStyle=(opts.bgMode==='green')?opts.greenColor:opts.pageColor;
@@ -126,7 +130,7 @@ export function renderFrame(ctx,size,progress,opts){
       ctx.fillStyle=`rgba(0,0,0,${opts.overlayMaskOpacity})`;
       ctx.fillRect(0,0,size,size);
     }
-    proj = projectTrackOnAmap(state.trackPoints,size,opts.mapCenter,opts.mapZoom,k);
+    proj = opts.proj ?? projectTrackOnAmap(state.trackPoints,size,opts.mapCenter,opts.mapZoom,k);
   } else {
     if(opts.bgMode!=='green'){
       // 卡片模式：圆角裁剪 + 叠半透明卡片底，线路/标记/定位点都画在圆角内
@@ -134,25 +138,27 @@ export function renderFrame(ctx,size,progress,opts){
       ctx.fillStyle=hexToRgba(opts.bgColor,opts.bgOpacity);
       ctx.fillRect(0,0,size,size);
     }
-    proj=projectTrack(state.trackPoints,size-2*pad);
+    proj=opts.proj ?? projectTrack(state.trackPoints,size-2*pad);
     ctx.translate(pad,pad);
   }
-  strokePath(ctx,proj,opts.lineColor,lineWidth);
-  if(opts.showMarkers){
-    const mr=opts.markerSize*scale;
-    drawMarker(ctx,proj.points[0],opts.startColor,mr);
-    drawMarker(ctx,proj.points.at(-1),opts.endColor,mr);
-  }
-  // 定位点：仿 renderDot（白环 + 彩色心 + 阴影），直径随 dotSize*scale
-  const p=pointAtProgress(proj.points,progress);
-  if(p){
-    const d=opts.dotSize*scale;
-    const g=dotGeometry(d);
-    ctx.save();
-    ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
-    ctx.beginPath(); ctx.arc(p.x,p.y,g.outerR,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(p.x,p.y,g.coreR,0,Math.PI*2); ctx.fillStyle=opts.dotColor; ctx.fill();
+  if(proj.points?.length){
+    strokePath(ctx,proj,opts.lineColor,lineWidth);
+    if(opts.showMarkers){
+      const mr=opts.markerSize*scale;
+      drawMarker(ctx,proj.points[0],opts.startColor,mr);
+      drawMarker(ctx,proj.points.at(-1),opts.endColor,mr);
+    }
+    // 定位点：仿 renderDot（白环 + 彩色心 + 阴影），直径随 dotSize*scale
+    const p=pointAtProgress(proj.points,progress);
+    if(p){
+      const d=opts.dotSize*scale;
+      const g=dotGeometry(d);
+      ctx.save();
+      ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=g.shadowBlur; ctx.shadowOffsetY=g.shadowOffsetY;
+      ctx.beginPath(); ctx.arc(p.x,p.y,g.outerR,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(p.x,p.y,g.coreR,0,Math.PI*2); ctx.fillStyle=opts.dotColor; ctx.fill();
+    }
   }
   ctx.restore();
 }

@@ -20,7 +20,9 @@
   排在 module 入口之前，保证 `window.Mp4Muxer` 先就位。
 - 浏览器能力依赖：Canvas 2D、WebCodecs（`VideoEncoder`/`VideoFrame`，MP4 导出用，
   `mp4Supported()` 做能力检测）、`DOMParser`（GPX/TCX/KML 解析）、`localStorage`、
-  File API（拖拽/多选）、`Image` 加载、`EyeDropper`（取色器吸管，可选）。
+  File API（拖拽/多选）、`Image` 加载、`EyeDropper`（取色器吸管，可选）、
+  File System Access API（`showSaveFilePicker`，MP4 流式写盘用，`streamSinkSupported()` 做
+  能力检测，缺席时回落全内存路径并保留 600 秒时长上限）。
 
 ## 外部服务
 - 唯一外部网络集成：高德静态地图 API `https://restapi.amap.com/v3/staticmap`
@@ -44,11 +46,12 @@ src/
   state.mjs                 跨层共享状态 + CARD_SIZE
   dom.mjs                   $ 取元素
   core/                     geo · gcj02 · amap · metrics · color · track-files · export-params
+                            · track-time · export-meta
   parse/                    index · fit · geojson · csv · xml
   basemap/                  diagnose · image · fetch
   render/                   primitives · card · dot
-  export/                   status · png · mp4
-  ui/                       preview · map-panel · track-panel · track-errors · controls
+  export/                   status · png · mp4 · mp4-sink · mp4-opts · mp4-plan
+  ui/                       preview · map-panel · track-panel · track-errors · controls · time-mode
     color-picker/           index · popup · canvas · inputs
 vendor/
   mp4-muxer.js              第三方 MP4 封装库
