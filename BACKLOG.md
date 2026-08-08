@@ -15,29 +15,26 @@
   · 零长度轨迹的边界规则冲突，定为「零长度优先」
 另修一条过脆的既有 a11y 断言（把「恰好 1 个例外」写成了规则，改为按「是否滑杆旁」判定）。
 
-### Wave 2 — deps: Wave 1 · 三个文件全并行
-- [ ] T6  MP4 输出端：流式/内存双路径与 sidecar 落盘   file: src/export/mp4-sink.mjs（新建）   deps: T2, T3
-        spec: streamSinkSupported, MP4_MAX_DURATION_*, createMp4Sink, downloadSidecar
-        验收: visible + hidden 全绿；fastStart 随 kind 分流、AbortError 原样上抛
-- [ ] T7  MP4 帧参数：预投影与时间真实帧映射   file: src/export/mp4-opts.mjs（新建）   deps: T1, T5
-        spec: buildFrameOpts（从 mp4.mjs 迁入并加 proj）, buildTimeTruePlan
-        验收: visible + hidden 全绿；frameTimeMs 满足「第 x 秒 = t0 + x×scale」契约
-- [ ] T8  界面逻辑：时间真实模式状态与联动   file: src/ui/time-mode.mjs（新建）   deps: T1, T2, T4
-        spec: timeMode 状态对象, refreshTimeMode, isTimeTrueMode, updateTimeModeUI, currentExportWindow
-        验收: visible + hidden 全绿；无时间戳轨迹自动回落匀速并给出原因、体积估算随参数变
+### Wave 2 — deps: Wave 1 ✅ 全部完成
+- [x] T6  MP4 输出端：流式/内存双路径与 sidecar 落盘   file: src/export/mp4-sink.mjs   hidden 55/55
+- [x] T7  MP4 帧参数：预投影与时间真实帧映射   file: src/export/mp4-opts.mjs   hidden 89/89
 
-### Wave 3 — deps: Wave 2 · 两个文件并行
-- [ ] T9  MP4 编码主流程接时间真实与流式写盘   file: src/export/mp4.mjs   deps: T2, T5, T6, T7, T8
-        spec: exportMp4 换掉「progress 从哪来 / 码率从哪来 / 产物往哪写」三处接缝
-        验收: visible + hidden 全绿；文件仍 ≤200 行；现有 uiExport 测试不修改即通过
+### Wave 3 — deps: T6 ✅ 完成
+- [x] T8  界面逻辑：时间真实模式状态与联动   file: src/ui/time-mode.mjs   hidden 82/82
+
+### Wave 4 — deps: Wave 3 · 两组文件并行
+- [ ] T9  MP4 导出：决策层与主流程接线
+        file: src/export/mp4-plan.mjs（新建）+ src/export/mp4.mjs（改）   deps: T6, T7, T8
+        spec: resolveExportPlan, frameProgress, formatEta, buildExportSidecar + exportMp4 接线
+        验收: visible + hidden 全绿；mp4.mjs 仍 ≤200 行；现有 uiExport 测试不修改即通过
 - [ ] T10 扫拨条时间轴   file: src/ui/preview.mjs   deps: T1, T8
-        spec: updatePreviewScrubLabel 显示真实时刻, previewPlayStep 按真实时间轴推进
-        验收: visible + hidden 全绿；匀速模式标签文案断言不修改即通过
+        spec: updatePreviewScrubLabel 显示真实时刻, 逐帧推进按真实时间轴
+        验收: visible + hidden 全绿；匀速模式标签文案与推进速度断言不修改即通过
 
-### Wave 4 — deps: Wave 3
-- [ ] T11 装配接线   file: src/main.mjs（+ src/ui/track-panel.mjs 一行）   deps: T8, T9, T10
-        spec: 新控件事件绑定 + 首屏 refreshTimeMode/updateTimeModeUI + 轨迹变化时重算
-        验收: 全量 node --test 绿；无头 Chrome 实测载入 淀山湖.fit 走通时间真实模式
+### Wave 5 — deps: Wave 4
+- [ ] T11 装配接线   file: src/main.mjs + src/ui/track-panel.mjs   deps: T8, T9, T10
+        spec: 新控件事件绑定 + 首屏 refreshTimeMode/updateTimeModeUI + recomputeTrack/clearTrack 重算
+        验收: visible + hidden 全绿；依赖方向恒真（无模块 import main.mjs）
 
 ### 集成验证（全部单元完成后，架构师执行）
 - [ ] 全量 `node --test 'tests/**/*.test.mjs'`

@@ -493,10 +493,44 @@
     原因文案、体积估算文案随分辨率/画质/时长变化、datetime-local 按本地时区换算。
 
 - id: T9
-  title: MP4 编码主流程接入时间真实与流式写盘
-  file_path: src/export/mp4.mjs              # 改
+  title: MP4 导出：决策层与主流程接线
+  file_path: src/export/mp4-plan.mjs（新建）+ src/export/mp4.mjs（改）
+  # 两个文件同属导出流程的两半，由同一对 test-author / implementer 处理。
+  # 拆开的理由有二：exportMp4 是依赖 WebCodecs 的长异步流程，决策逻辑埋在里面无法单元测试；
+  # 且合在一处会突破 200 行的单文件约束。
   functions:
-    - name: exportMp4（及其内部流程）
+    - name: resolveExportPlan
+      inputs: []
+      outputs: "{ mode, fps, frames, durationSec, size, quality, bitrate, maxDurationSec, preferStream, suggestedName, timePlan, t0Ms, scale }"
+      behavioral_contract: |
+        读控件与依赖单元算出本次导出的全部参数。分辨率经 + 转数值后查码率表；
+        时长上限随流式可用性取 MP4_MAX_DURATION_STREAM / MEMORY，并用它夹取时长、
+        再按夹取后的时长重算帧数；时间真实模式的三个前置条件（radio 选中且可用、
+        currentExportWindow 非 null、buildTimeTruePlan 非 null）任一不满足即回落匀速。
+      error_cases:
+        - { condition: "轨迹为空", behavior: "照常返回匀速模式的对象，可导出与否由调用方判断" }
+        - { condition: "buildTimeTruePlan 抛 RangeError", behavior: "不吞，向上传播" }
+    - name: frameProgress
+      inputs: [ "plan", "i: number" ]
+      outputs: "number ∈ [0,1]"
+      behavioral_contract: |
+        时间真实模式 = progressAtTime(plan.timePlan.index, plan.timePlan.frameTimeMs(i))；
+        匀速模式 = frames>1 ? i/(frames-1) : 0（与现有行为逐字符相同）。
+      error_cases:
+        - { condition: "plan 为 null/undefined", behavior: "返回 0，不抛" }
+    - name: formatEta
+      inputs: [ "remainingSec: number" ]
+      outputs: "string"
+      behavioral_contract: |
+        剩余秒数 → 中文人话，三个量级（秒 / 分秒 / 时分），含秒进位到 60、分进位到 60；
+        非有限数或负数返回空串，界面据此不显示。
+    - name: buildExportSidecar
+      inputs: [ "plan", "extra: { trackStartMs, trackEndMs, sourceFiles, collapsedSegmentGaps }" ]
+      outputs: "object | null"
+      behavioral_contract: |
+        把 plan 的字段映射成 buildSidecarMeta 的入参并调用它；
+        匀速模式（mode !== 'true' 或 t0Ms 非有限数）返回 null，不产 sidecar。
+    - name: exportMp4（主流程接线）
       inputs: []
       outputs: "Promise<void>"
       behavioral_contract: |
@@ -595,29 +629,34 @@
 
 ## Dependency Graph
 
-```
-T1 core/track-time ──┬─> T7 export/mp4-opts ──┐
-                     ├─> T8 ui/time-mode ─────┼─> T9  export/mp4 ──┐
-T2 core/export-params┼─> T6 export/mp4-sink ──┘                    ├─> T11 main
-                     └─> T8                                        │
-T3 core/export-meta ──> T6                                         │
-T4 index.html + styles > T8                                        │
-T5 render/card ───────> T7                                         │
-                        T8 ──────────────────> T10 ui/preview ─────┘
-```
+| 单元 | 文件 | 依赖 |
+|---|---|---|
+| T1 | `src/core/track-time.mjs` | — |
+| T2 | `src/core/export-params.mjs` | — |
+| T3 | `src/core/export-meta.mjs` | — |
+| T4 | `index.html` + `styles/` | — |
+| T5 | `src/render/card.mjs` | — |
+| T6 | `src/export/mp4-sink.mjs` | T2 · T3 |
+| T7 | `src/export/mp4-opts.mjs` | T1 · T5 |
+| T8 | `src/ui/time-mode.mjs` | T1 · T2 · T4 · T6 |
+| T9 | `src/export/mp4-plan.mjs` + `src/export/mp4.mjs` | T6 · T7 · T8 |
+| T10 | `src/ui/preview.mjs` | T1 · T8 |
+| T11 | `src/main.mjs`（+ `src/ui/track-panel.mjs` 一行） | T8 · T9 · T10 |
 
-无环。T1–T5 无入边；T11 为汇点。
+无环：T1–T5 无入边，T11 为汇点。
 
 ## Execution Waves
 
 | 波次 | 单元 | 并行性 |
 |---|---|---|
 | Wave 1 | T1 · T2 · T3 · T4 · T5 | 五个文件互不相交，全并行 |
-| Wave 2 | T6 · T7 · T8 | 三个文件互不相交，全并行 |
-| Wave 3 | T9 · T10 | 两个文件互不相交，并行 |
-| Wave 4 | T11 | 单元（含 track-panel 一行接线） |
+| Wave 2 | T6 · T7 | 两个文件互不相交，并行 |
+| Wave 3 | T8 | 单元（等 T6 的 streamSinkSupported） |
+| Wave 4 | T9 · T10 | 两组文件互不相交，并行 |
+| Wave 5 | T11 | 单元（含 track-panel 一行接线） |
 
 同文件串行约束：全程无两个单元落在同一文件。
+测试可以比实现提前一波派发——test-author 只需 spec 与接口契约，不需要依赖单元的实现落地。
 
 ## 验收
 
