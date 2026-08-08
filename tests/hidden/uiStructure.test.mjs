@@ -253,14 +253,28 @@ test('uiStructure: 每个 input.val 都有可访问名称（aria-label 或关联
   assert.deepEqual(bad, [], `缺少可访问名称的 input.val：${bad.join(', ')}`);
 });
 
-test('uiStructure: 滑杆旁的数值框（input.val）绝大多数直接带 aria-label', () => {
-  const valInputs = tagsWithClass('val').filter(t => /^<input\b/i.test(t));
-  const withAria = valInputs.filter(t => collapse(attrOf(t, 'aria-label') || ''));
-  assert.ok(
-    withAria.length >= valInputs.length - 1,
-    `input.val 共 ${valInputs.length} 个，带 aria-label 的只有 ${withAria.length} 个；` +
-      '只允许有 label[for] 关联的那一个数值框省略 aria-label'
+test('uiStructure: 滑杆旁的数值框（input.val）都直接带 aria-label', () => {
+  // field 范式里滑杆与数值框成对出现，可见 label 归滑杆，数值框只能靠 aria-label 拿到
+  // 可访问名称。这一对按 bind(id, idV) 约定命名，去掉数值框 id 尾部的 V 即滑杆 id。
+  // 自带 label[for] 的独立数值框不在此列，它们的可访问名称由第 241 行那条测试兜底。
+  const rangeIds = new Set(
+    tagsNamed('input')
+      .filter(t => attrOf(t, 'type') === 'range')
+      .map(t => attrOf(t, 'id'))
+      .filter(Boolean)
   );
+  const beside = tagsWithClass('val')
+    .filter(t => /^<input\b/i.test(t))
+    .filter(t => {
+      const id = attrOf(t, 'id') || '';
+      return id.endsWith('V') && rangeIds.has(id.slice(0, -1));
+    });
+
+  assert.ok(beside.length >= 5, `应当抽到若干滑杆旁的数值框，实际 ${beside.length} 个`);
+  const bad = beside
+    .filter(t => !collapse(attrOf(t, 'aria-label') || ''))
+    .map(t => attrOf(t, 'id') || t);
+  assert.deepEqual(bad, [], `滑杆旁的数值框缺少 aria-label：${bad.join(', ')}`);
 });
 
 test('uiStructure: 每个 segmented 容器都带 role="radiogroup" 与非空 aria-label', () => {
